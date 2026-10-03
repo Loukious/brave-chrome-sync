@@ -1,0 +1,31 @@
+name: Check automation and patch base
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Check generated job graph
+        run: python scripts/generate_workflow.py --check
+      - name: Check release selection and fail-closed publishing
+        run: python -m unittest discover -s tests -v
+      - name: Check updater installation and failure recovery offline
+        shell: pwsh
+        run: ./tests/updater.test.ps1
+      - name: Replay original patch set
+        shell: bash
+        run: |
+          tag=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_tag"])')
+          sha=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_commit"])')
+          python scripts/prepare.py --root "$RUNNER_TEMP/base-check" --tag "$tag" --sha "$sha" --patch-only

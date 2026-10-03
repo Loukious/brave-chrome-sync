@@ -1,0 +1,34 @@
+From 53ee81a458c388562becbcd43af492ae72df6f50 Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Fri, 2 Oct 2026 15:54:26 +0100
+Subject: [PATCH 3/4] Fix Wintun hook Python path
+
+---
+ build/win/download_wintun.py | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/build/win/download_wintun.py b/build/win/download_wintun.py
+index 9ce0026def4..53ef1912b1b 100755
+--- a/build/win/download_wintun.py
++++ b/build/win/download_wintun.py
+@@ -14,13 +14,19 @@ in brave://credits.
+ """
+ 
+ from argparse import ArgumentParser
+-from brave_chromium_utils import wspath
+ from deps_config import DEPS_PACKAGES_URL
+ from os.path import basename, exists, join
+ 
+ import os
+ import shutil
++import sys
++
++# DEPS hooks execute this file from the Brave checkout root, so the shared
++# Brave Python helpers are not on sys.path automatically.
++_SCRIPT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'script')
++sys.path.insert(0, os.path.abspath(_SCRIPT_DIR))
+ 
++from brave_chromium_utils import wspath
+ import deps
+ 
+ README_TEMPLATE = """Name: WinTun

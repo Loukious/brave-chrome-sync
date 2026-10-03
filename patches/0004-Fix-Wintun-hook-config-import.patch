@@ -1,0 +1,29 @@
+From 956c2e2113b48c510e2dc3ad8322b00f1b61c213 Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Fri, 2 Oct 2026 15:55:14 +0100
+Subject: [PATCH 4/4] Fix Wintun hook config import
+
+---
+ build/win/download_wintun.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/build/win/download_wintun.py b/build/win/download_wintun.py
+index 53ef1912b1b..ef0e3786d07 100755
+--- a/build/win/download_wintun.py
++++ b/build/win/download_wintun.py
+@@ -14,7 +14,6 @@ in brave://credits.
+ """
+ 
+ from argparse import ArgumentParser
+-from deps_config import DEPS_PACKAGES_URL
+ from os.path import basename, exists, join
+ 
+ import os
+@@ -27,6 +26,7 @@ _SCRIPT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'script')
+ sys.path.insert(0, os.path.abspath(_SCRIPT_DIR))
+ 
+ from brave_chromium_utils import wspath
++from deps_config import DEPS_PACKAGES_URL
+ import deps
+ 
+ README_TEMPLATE = """Name: WinTun

@@ -1,0 +1,26 @@
+{
+  "upstream_channel": "nightly",
+  "minimum_upstream_version": "1.99.8",
+  "patch_base_tag": "v1.99.8",
+  "patch_base_commit": "9cc0476e9506f93ff6921b0afed668d048f07313",
+  "patch_revision": 1,
+  "runner": "windows-2025-vs2026",
+  "node_version": "24.x",
+  "pnpm_version": "11.11.0",
+  "compile_minutes": 210,
+  "compile_jobs": 2,
+  "build_stages": 16,
+  "gn_args": {
+    "is_official_build": false,
+    "is_component_build": false,
+    "symbol_level": 0,
+    "blink_symbol_level": 0,
+    "v8_symbol_level": 0,
+    "use_thin_lto": false,
+    "chrome_pgo_phase": 0,
+    "concurrent_links": 1,
+    "enable_updater": false,
+    "enable_update_notifications": false,
+    "use_remoteexec": false
+  }
+}

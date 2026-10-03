@@ -1,0 +1,1705 @@
+From bba9d801f72219949a79cffec90f5fbbb6f59fef Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Fri, 2 Oct 2026 15:22:39 +0100
+Subject: [PATCH 1/4] Restore Chromium Google sign-in and Sync paths
+
+---
+ browser/brave_browser_main_parts.cc           | 21 -----
+ browser/brave_content_browser_client.cc       |  5 +-
+ browser/brave_prefs_browsertest.cc            |  2 +-
+ ...browser_context_keyed_service_factories.cc |  2 -
+ .../resources/settings/br/page_visibility.ts  |  4 +-
+ .../resources/settings/br/settings_main.ts    | 16 ----
+ .../resources/settings/br/settings_menu.ts    | 13 +---
+ browser/resources/settings/brave_routes.ts    |  7 --
+ .../views/profiles/brave_profile_menu_view.cc |  3 +-
+ browser/ui/webui/brave_settings_ui.cc         |  2 -
+ build/commands/lib/buildArgs.ts               |  1 +
+ .../browser/profiles/delete_profile_helper.cc | 61 ---------------
+ .../gaia_info_update_service_factory.cc       | 14 ----
+ .../profiles/pref_service_builder_utils.cc    |  2 -
+ .../people_page.html.ts.lit_mangler.ts        | 77 +------------------
+ .../settings/people_page/people_page.ts       | 26 +------
+ .../people_page/sync_account_control.ts       | 37 +--------
+ .../browser/signin/chrome_signin_helper.cc    |  7 --
+ .../browser/signin/signin_promo_unittest.cc   | 48 ------------
+ .../browser/signin/signin_promo_util.cc       | 15 ----
+ .../browser/sync/sync_service_factory.cc      | 15 +---
+ .../chrome/browser/ui/chrome_pages.cc         | 19 -----
+ .../browser/ui/startup/first_run_service.cc   | 29 -------
+ .../startup/first_run_service_browsertest.cc  | 17 ----
+ .../ui/views/profiles/profile_menu_view.cc    | 24 ------
+ .../ui/webui/settings/people_handler.cc       | 24 ------
+ .../ui/webui/signin/profile_picker_ui.cc      | 17 ----
+ chromium_src/components/browser_sync/DEPS     |  5 +-
+ .../browser_sync/common_controller_builder.cc | 11 ---
+ .../primary_account_manager.cc                |  7 --
+ .../primary_account_mutator_impl.cc           | 12 ---
+ .../profile_oauth2_token_service_builder.cc   |  9 ---
+ .../identity_manager/identity_manager.cc      | 22 ------
+ .../identity_manager_builder.cc               | 34 --------
+ chromium_src/components/sync/base/sync_util.h | 13 ----
+ .../sync/engine/data_type_registry.cc         |  4 -
+ .../net/sync_server_connection_manager.cc     | 20 -----
+ .../sync/engine/sync_manager_factory.cc       |  4 -
+ .../sync/service/sync_internals_util.cc       | 48 +-----------
+ .../sync/service/sync_service_impl.cc         | 59 --------------
+ .../sync/service/sync_user_settings_impl.cc   | 15 ++--
+ .../device_info_sync_bridge.cc                |  5 +-
+ ...ettings-people_page-sync_controls.ts.patch | 30 --------
+ ...owser-signin-chrome_signin_helper.cc.patch | 12 ---
+ ...-browser-signin-signin_promo_util.cc.patch | 12 ---
+ .../chrome-browser-ui-chrome_pages.cc.patch   | 13 ----
+ ...i-tabs-recent_tabs_sub_menu_model.cc.patch |  9 ---
+ ...-ui-webui-settings-people_handler.cc.patch | 28 -------
+ ...ignin-public-base-signin_switches.cc.patch | 16 ----
+ .../components-sync-base-features.cc.patch    | 21 -----
+ ...ts-sync-service-sync_auth_manager.cc.patch | 16 ----
+ .../tabs/recent_tabs_sub_menu_model.cc.yaml   | 13 ----
+ .../public/base/signin_switches.cc.yaml       |  5 --
+ rewrite/components/sync/base/features.cc.yaml | 31 --------
+ .../sync/service/sync_auth_manager.cc.yaml    | 29 -------
+ test/filters/components_unittests.filter      | 12 ---
+ test/filters/unit_tests.filter                |  1 -
+ 57 files changed, 26 insertions(+), 998 deletions(-)
+ delete mode 100644 patches/chrome-browser-resources-settings-people_page-sync_controls.ts.patch
+ delete mode 100644 patches/chrome-browser-signin-chrome_signin_helper.cc.patch
+ delete mode 100644 patches/chrome-browser-signin-signin_promo_util.cc.patch
+ delete mode 100644 patches/chrome-browser-ui-chrome_pages.cc.patch
+ delete mode 100644 patches/chrome-browser-ui-webui-settings-people_handler.cc.patch
+ delete mode 100644 patches/components-sync-base-features.cc.patch
+ delete mode 100644 patches/components-sync-service-sync_auth_manager.cc.patch
+ delete mode 100644 rewrite/components/sync/base/features.cc.yaml
+ delete mode 100644 rewrite/components/sync/service/sync_auth_manager.cc.yaml
+
+diff --git a/browser/brave_browser_main_parts.cc b/browser/brave_browser_main_parts.cc
+index 5fbaad39da5..d78b074181e 100644
+--- a/browser/brave_browser_main_parts.cc
++++ b/browser/brave_browser_main_parts.cc
+@@ -15,7 +15,6 @@
+ #include "brave/components/brave_component_updater/browser/brave_on_demand_updater.h"
+ #include "brave/components/brave_rewards/core/rewards_flags.h"
+ #include "brave/components/brave_rewards/core/rewards_util.h"
+-#include "brave/components/brave_sync/features.h"
+ #include "brave/components/constants/brave_constants.h"
+ #include "brave/components/constants/pref_names.h"
+ #include "brave/components/ipfs/buildflags/buildflags.h"
+@@ -29,9 +28,6 @@
+ #include "chrome/common/chrome_switches.h"
+ #include "components/component_updater/component_updater_service.h"
+ #include "components/prefs/pref_service.h"
+-#include "components/sync/base/command_line_switches.h"
+-#include "components/sync/service/sync_service.h"
+-#include "components/sync/service/sync_user_settings.h"
+ #include "content/public/browser/render_frame_host.h"
+ #include "content/public/browser/web_contents.h"
+ #include "extensions/buildflags/buildflags.h"
+@@ -58,8 +54,6 @@
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+ #include "brave/browser/infobars/brave_confirm_p3a_infobar_delegate.h"
+-#include "brave/browser/infobars/brave_sync_account_deleted_infobar_delegate.h"
+-#include "brave/browser/infobars/sync_cannot_run_infobar_delegate.h"
+ #include "chrome/browser/ui/browser.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+ #include "components/infobars/content/content_infobar_manager.h"
+@@ -151,15 +145,12 @@ void ChromeBrowserMainParts::PostBrowserStart() {
+     active_web_contents = browser->GetTabStripModel()->GetActiveWebContents();
+ 
+     if (active_web_contents) {
+-      Profile* profile = browser->GetProfile();
+       infobars::ContentInfoBarManager* infobar_manager =
+           infobars::ContentInfoBarManager::FromWebContents(active_web_contents);
+       if (infobar_manager) {
+         BraveConfirmP3AInfoBarDelegate::Create(
+             infobar_manager, g_browser_process->local_state());
+ 
+-        BraveSyncAccountDeletedInfoBarDelegate::Create(active_web_contents,
+-                                                       profile);
+       }
+     }
+   }
+@@ -178,18 +169,6 @@ void ChromeBrowserMainParts::PreShutdown() {
+ 
+ void ChromeBrowserMainParts::PreProfileInit() {
+   ChromeBrowserMainParts_ChromiumImpl::PreProfileInit();
+-#if !BUILDFLAG(IS_ANDROID)
+-  auto* command_line = base::CommandLine::ForCurrentProcess();
+-  if (!base::FeatureList::IsEnabled(brave_sync::features::kBraveSync)) {
+-    // Disable sync temporarily
+-    if (!command_line->HasSwitch(syncer::kDisableSync))
+-      command_line->AppendSwitch(syncer::kDisableSync);
+-  } else {
+-    // Relaunch after flag changes will still have the switch
+-    // when switching from disabled to enabled
+-    command_line->RemoveSwitch(syncer::kDisableSync);
+-  }
+-#endif
+ }
+ 
+ void ChromeBrowserMainParts::PostProfileInit(Profile* profile,
+diff --git a/browser/brave_content_browser_client.cc b/browser/brave_content_browser_client.cc
+index 0c963ededeb..3524e378a9d 100644
+--- a/browser/brave_content_browser_client.cc
++++ b/browser/brave_content_browser_client.cc
+@@ -114,6 +114,7 @@
+ #include "chrome/browser/profiles/profile_io_data.h"
+ #include "chrome/browser/search_engines/template_url_service_factory.h"
+ #include "chrome/common/url_constants.h"
++#include "chrome/common/webui_url_constants.h"
+ #include "chrome/grit/branded_strings.h"
+ #include "components/content_settings/browser/page_specific_content_settings.h"
+ #include "components/content_settings/core/browser/host_content_settings_map.h"
+@@ -1481,12 +1482,12 @@ bool BraveContentBrowserClient::HandleURLOverrideRewrite(
+     return false;
+   }
+ 
+-  // brave://sync => brave://settings/braveSync
++  // brave://sync => brave://settings/syncSetup
+   if (url->host() == chrome::kBraveUISyncHost) {
+     GURL::Replacements replacements;
+     replacements.SetSchemeStr(content::kChromeUIScheme);
+     replacements.SetHostStr(chrome::kChromeUISettingsHost);
+-    replacements.SetPathStr(kBraveSyncPath);
++    replacements.SetPathStr(chrome::kSyncSetupSubPage);
+     *url = url->ReplaceComponents(replacements);
+     return true;
+   }
+diff --git a/browser/brave_prefs_browsertest.cc b/browser/brave_prefs_browsertest.cc
+index 48ac9eec04f..d838ec8c21d 100644
+--- a/browser/brave_prefs_browsertest.cc
++++ b/browser/brave_prefs_browsertest.cc
+@@ -156,7 +156,7 @@ IN_PROC_BROWSER_TEST_F(BraveProfilePrefsBrowserTest,
+   EXPECT_EQ(chrome_test_utils::GetProfile(this)->GetPrefs()->GetInteger(
+                 prefetch::prefs::kNetworkPredictionOptions),
+             static_cast<int>(prefetch::NetworkPredictionOptions::kDisabled));
+-  EXPECT_FALSE(chrome_test_utils::GetProfile(this)->GetPrefs()->GetBoolean(
++  EXPECT_TRUE(chrome_test_utils::GetProfile(this)->GetPrefs()->GetBoolean(
+       prefs::kSigninAllowedOnNextStartup));
+ #if !BUILDFLAG(IS_ANDROID)
+   EXPECT_FALSE(chrome_test_utils::GetProfile(this)->GetPrefs()->GetBoolean(
+diff --git a/browser/browser_context_keyed_service_factories.cc b/browser/browser_context_keyed_service_factories.cc
+index a5f25436d42..93ed2466028 100644
+--- a/browser/browser_context_keyed_service_factories.cc
++++ b/browser/browser_context_keyed_service_factories.cc
+@@ -22,7 +22,6 @@
+ #include "brave/browser/search_engines/search_engine_tracker.h"
+ #include "brave/browser/serp_metrics/serp_metrics_service_factory.h"
+ #include "brave/browser/skus/skus_service_factory.h"
+-#include "brave/browser/sync/brave_sync_alerts_service_factory.h"
+ #include "brave/browser/url_sanitizer/url_sanitizer_service_factory.h"
+ #include "brave/browser/webcompat_reporter/webcompat_reporter_service_factory.h"
+ #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
+@@ -201,7 +200,6 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
+   request_otr::RequestOTRServiceFactory::GetInstance();
+ #endif
+ 
+-  BraveSyncAlertsServiceFactory::GetInstance();
+ 
+ #if BUILDFLAG(ENABLE_CONTAINERS)
+   ContainersServiceFactory::GetInstance();
+diff --git a/browser/resources/settings/br/page_visibility.ts b/browser/resources/settings/br/page_visibility.ts
+index 70c14e778a3..75c6a34c292 100644
+--- a/browser/resources/settings/br/page_visibility.ts
++++ b/browser/resources/settings/br/page_visibility.ts
+@@ -92,13 +92,13 @@ function getPageVisibility () {
+     ...chromiumPageVisibility,
+     // overrides
+     ai: false,
+-    people: false,
++    people: true,
+     defaultBrowser: false,
+     onStartup: false,
+     appearance: alwaysTrueProxy,
+     privacy: alwaysTrueProxy,
+     // custom properties
+-    braveSync: !loadTimeData.getBoolean('isSyncDisabled'),
++    braveSync: false,
+     // <if expr="enable_brave_wallet">
+     braveWallet: loadTimeData.getBoolean('isBraveWalletAllowed'),
+     // </if>
+diff --git a/browser/resources/settings/br/settings_main.ts b/browser/resources/settings/br/settings_main.ts
+index bde99241377..b773d41aa27 100644
+--- a/browser/resources/settings/br/settings_main.ts
++++ b/browser/resources/settings/br/settings_main.ts
+@@ -161,22 +161,6 @@ RegisterPolymerTemplateModifications({
+       `)
+     // </if>
+ 
+-    // Insert the sync page into the view manager
+-    switcher.appendChild(
+-      html`
+-        <template is="dom-if" if="[[showPage_(pageVisibility_.braveSync)]]">
+-          <div slot="view" id="braveSync">
+-            <template is="dom-if" if="[[renderPlugin_(
+-              routes_.BRAVE_SYNC, lastRoute_, inSearchMode_)]]">
+-              <settings-brave-sync-page-index
+-                prefs="{{prefs}}"
+-                in-search-mode="[[inSearchMode_]]">
+-              </settings-brave-sync-page-index>
+-            </template>
+-          </div>
+-        </template>
+-      `)
+-
+     // Insert the extensions page into the view manager
+     switcher.appendChild(
+       html`
+diff --git a/browser/resources/settings/br/settings_menu.ts b/browser/resources/settings/br/settings_menu.ts
+index c17e6cd6f19..23a5af8be1d 100644
+--- a/browser/resources/settings/br/settings_menu.ts
++++ b/browser/resources/settings/br/settings_menu.ts
+@@ -313,19 +313,10 @@ RegisterPolymerTemplateModifications({
+       lastInserted.insertAdjacentElement('afterend', leoAssistantEl)!
+ // </if>
+ 
+-    // Add Sync item
+-    const syncEl = createMenuElement(
+-      loadTimeData.getString('braveSync'),
+-      '/braveSync',
+-      'product-sync',
+-      'braveSync',
+-    )
+-    lastInserted = lastInserted.insertAdjacentElement('afterend', syncEl)!
+-
+     // Add search item
+     const searchEl = getMenuElement(templateContent, '/search')
+-    if (searchEl && syncEl) {
+-      syncEl.insertAdjacentElement('afterend', searchEl)
++    if (searchEl && lastInserted) {
++      lastInserted.insertAdjacentElement('afterend', searchEl)
+     }
+ 
+     // Add Extensions item
+diff --git a/browser/resources/settings/brave_routes.ts b/browser/resources/settings/brave_routes.ts
+index 075834e07c4..d9decc329f1 100644
+--- a/browser/resources/settings/brave_routes.ts
++++ b/browser/resources/settings/brave_routes.ts
+@@ -147,9 +147,6 @@ export default function addBraveRoutes(r: Partial<SettingsRoutes>) {
+   if (r.SITE_SETTINGS_STORAGE_ACCESS) {
+     delete r.SITE_SETTINGS_STORAGE_ACCESS
+   }
+-  if (r.SYNC) {
+-    delete r.SYNC
+-  }
+   // Delete identity docs and travel autofill routes
+   if (r.IDENTITY_DOCS) {
+     delete r.IDENTITY_DOCS
+@@ -157,8 +154,4 @@ export default function addBraveRoutes(r: Partial<SettingsRoutes>) {
+   if (r.TRAVEL) {
+     delete r.TRAVEL
+   }
+-  // Delete /syncSetup/advanced
+-  if (r.SYNC_ADVANCED) {
+-    delete r.SYNC_ADVANCED
+-  }
+ }
+diff --git a/browser/ui/views/profiles/brave_profile_menu_view.cc b/browser/ui/views/profiles/brave_profile_menu_view.cc
+index 6a202f45e93..4c30ef9ab49 100644
+--- a/browser/ui/views/profiles/brave_profile_menu_view.cc
++++ b/browser/ui/views/profiles/brave_profile_menu_view.cc
+@@ -51,7 +51,6 @@ void BraveProfileMenuView::MaybeBuildCloseBrowsersButton() {
+       vector_icons::kCloseOldIcon);
+ }
+ 
+-// We don't want feature buttons to manage google account
+ void BraveProfileMenuView::BuildFeatureButtons() {
+-  MaybeBuildCloseBrowsersButton();
++  ProfileMenuView::BuildFeatureButtons();
+ }
+diff --git a/browser/ui/webui/brave_settings_ui.cc b/browser/ui/webui/brave_settings_ui.cc
+index 61f8141340a..c741850f6ab 100644
+--- a/browser/ui/webui/brave_settings_ui.cc
++++ b/browser/ui/webui/brave_settings_ui.cc
+@@ -26,7 +26,6 @@
+ #include "brave/browser/ui/webui/settings/brave_appearance_handler.h"
+ #include "brave/browser/ui/webui/settings/brave_default_extensions_handler.h"
+ #include "brave/browser/ui/webui/settings/brave_privacy_handler.h"
+-#include "brave/browser/ui/webui/settings/brave_sync_handler.h"
+ #include "brave/browser/ui/webui/settings/default_brave_shields_handler.h"
+ #include "brave/components/ai_chat/core/common/buildflags/buildflags.h"
+ #include "brave/components/brave_account/brave_account_service.h"
+@@ -168,7 +167,6 @@ BraveSettingsUI::BraveSettingsUI(content::WebUI* web_ui) : SettingsUI(web_ui) {
+   web_ui->AddMessageHandler(std::make_unique<DefaultBraveShieldsHandler>());
+   web_ui->AddMessageHandler(std::make_unique<BraveDefaultExtensionsHandler>());
+   web_ui->AddMessageHandler(std::make_unique<BraveAppearanceHandler>());
+-  web_ui->AddMessageHandler(std::make_unique<BraveSyncHandler>());
+ #if BUILDFLAG(ENABLE_BRAVE_WALLET)
+   web_ui->AddMessageHandler(std::make_unique<BraveWalletHandler>());
+ #endif
+diff --git a/build/commands/lib/buildArgs.ts b/build/commands/lib/buildArgs.ts
+index f440715e82a..e967de11c55 100644
+--- a/build/commands/lib/buildArgs.ts
++++ b/build/commands/lib/buildArgs.ts
+@@ -19,6 +19,7 @@ const FORWARD_ENV_CONFIG_VARS_TO_GN_ARGS = [
+   'concurrent_links',
+   'dcheck_always_on',
+   'enable_updater',
++  'google_api_key',
+   'google_default_client_id',
+   'google_default_client_secret',
+   'msan_track_origins',
+diff --git a/chromium_src/chrome/browser/profiles/delete_profile_helper.cc b/chromium_src/chrome/browser/profiles/delete_profile_helper.cc
+index 301ef767d25..4b6dad4ffe4 100644
+--- a/chromium_src/chrome/browser/profiles/delete_profile_helper.cc
++++ b/chromium_src/chrome/browser/profiles/delete_profile_helper.cc
+@@ -3,65 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include <string_view>
+-
+-#include "base/logging.h"
+-#include "brave/components/sync/service/brave_sync_service_impl.h"
+-#include "chrome/browser/signin/identity_manager_factory.h"
+-#include "chrome/browser/sync/sync_service_factory.h"
+-#include "components/signin/public/identity_manager/identity_manager.h"
+-#include "components/sync/service/sync_user_settings.h"
+-
+-class Profile;
+-
+-namespace {
+-
+-bool StopSyncIfActive(Profile* profile, const char* func_name) {
+-  // If HasPrimaryAccount is used somewhere out of DisableSyncForProfileDeletion
+-  // we don't want to stop Sync.
+-  if (std::string_view(func_name) != "DisableSyncForProfileDeletion") {
+-    VLOG(0) << "Unexpected call of StopSyncIfActive from " << func_name
+-            << " Sync is not stopped";
+-    return true;
+-  }
+-
+-  if (SyncServiceFactory::HasSyncService(profile)) {
+-    syncer::BraveSyncServiceImpl* sync_service =
+-        static_cast<syncer::BraveSyncServiceImpl*>(
+-            SyncServiceFactory::GetForProfile(profile));
+-    sync_service->StopAndClearWithShutdownReason();
+-  }
+-
+-  return true;
+-}
+-
+-}  // namespace
+-
+-// Suppress warning after macro expanding
+-// error: '&&' within '||' [-Werror,-Wlogical-op-parentheses]
+-// if (!identity_manager || !identity_manager->HasPrimaryAccount(..) &&
+-//     !StopSyncIfActive(profile)) {
+-// Compiler want us to make
+-// if (!A || (!B && C)), but with this type of override we can't.
+-
+-#pragma clang diagnostic push
+-#pragma clang diagnostic ignored "-Wlogical-op-parentheses"
+-
+-// Ensure HasPrimaryAccount override happens at DisableSyncForProfileDeletion
+-// function. We assume 'IdentityManager* identity_manager' is initialized from
+-// the factory followed by a nullptr check.
+-#define IdentityManager                                                        \
+-  IdentityManager* identity_manager_unused = nullptr;                          \
+-  (void)(identity_manager_unused);                                             \
+-  static_assert(std::string_view(__func__) == "DisableSyncForProfileDeletion", \
+-                "Override at a wrong function");                               \
+-  signin::IdentityManager
+-
+-#define HasPrimaryAccount(LEVEL) \
+-  HasPrimaryAccount(LEVEL) && StopSyncIfActive(profile, __func__)
+-
+ #include <chrome/browser/profiles/delete_profile_helper.cc>
+-
+-#undef HasPrimaryAccount
+-#undef IdentityManager
+-#pragma clang diagnostic pop
+diff --git a/chromium_src/chrome/browser/profiles/gaia_info_update_service_factory.cc b/chromium_src/chrome/browser/profiles/gaia_info_update_service_factory.cc
+index abed9a6384f..2a1b862465d 100644
+--- a/chromium_src/chrome/browser/profiles/gaia_info_update_service_factory.cc
++++ b/chromium_src/chrome/browser/profiles/gaia_info_update_service_factory.cc
+@@ -3,18 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "chrome/browser/profiles/gaia_info_update_service_factory.h"
+-
+-// Include to prevent redefining BuildServiceInstanceForBrowserContext
+-#include "chrome/browser/signin/identity_manager_factory.h"
+-
+-#define BuildServiceInstanceForBrowserContext \
+-  BuildServiceInstanceForBrowserContext_ChromiumImpl
+ #include <chrome/browser/profiles/gaia_info_update_service_factory.cc>
+-#undef BuildServiceInstanceForBrowserContext
+-
+-std::unique_ptr<KeyedService>
+-GAIAInfoUpdateServiceFactory::BuildServiceInstanceForBrowserContext(
+-    content::BrowserContext* context) const {
+-  return nullptr;
+-}
+diff --git a/chromium_src/chrome/browser/profiles/pref_service_builder_utils.cc b/chromium_src/chrome/browser/profiles/pref_service_builder_utils.cc
+index 538a84e6eec..ebb806c5438 100644
+--- a/chromium_src/chrome/browser/profiles/pref_service_builder_utils.cc
++++ b/chromium_src/chrome/browser/profiles/pref_service_builder_utils.cc
+@@ -28,8 +28,6 @@ void RegisterProfilePrefs(bool is_signin_profile,
+   registry->SetDefaultPrefValue(
+       spellcheck::prefs::kSpellCheckUseSpellingService, base::Value(false));
+ 
+-  registry->SetDefaultPrefValue(prefs::kSigninAllowedOnNextStartup,
+-                                base::Value(false));
+ #if BUILDFLAG(IS_LINUX)
+   // Use brave theme by default instead of gtk theme.
+   registry->SetDefaultPrefValue(
+diff --git a/chromium_src/chrome/browser/resources/settings/people_page/people_page.html.ts.lit_mangler.ts b/chromium_src/chrome/browser/resources/settings/people_page/people_page.html.ts.lit_mangler.ts
+index 4f05787b4ce..6865d20ef40 100644
+--- a/chromium_src/chrome/browser/resources/settings/people_page/people_page.html.ts.lit_mangler.ts
++++ b/chromium_src/chrome/browser/resources/settings/people_page/people_page.html.ts.lit_mangler.ts
+@@ -3,79 +3,4 @@
+ // License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ // You can obtain one at https://mozilla.org/MPL/2.0/.
+ 
+-import { mangle } from 'lit_mangler'
+-
+-// Our getStarted page embeds this element as a flat list of rows, not as
+-// its own section, and doesn't support Google sign-in/sync, so the
+-// "You and Brave" section title and the sync/Google-services rows don't
+-// belong there.
+-mangle((root) => {
+-  const section = root.querySelector('settings-section')
+-  if (!section) {
+-    throw new Error(`[Settings] People page: couldn't find settings-section`)
+-  }
+-
+-  const accountSubpageRow = root.querySelector('#account-subpage-row')
+-  if (!accountSubpageRow) {
+-    throw new Error(
+-      `[Settings] People page: couldn't find #account-subpage-row`)
+-  }
+-  accountSubpageRow.remove()
+-
+-  const syncSetup = root.querySelector('#sync-setup')
+-  if (!syncSetup) {
+-    throw new Error(`[Settings] People page: couldn't find #sync-setup`)
+-  }
+-  syncSetup.remove()
+-
+-  const googleServices = root.querySelector('#google-services')
+-  if (!googleServices) {
+-    throw new Error(`[Settings] People page: couldn't find #google-services`)
+-  }
+-  googleServices.remove()
+-
+-  // Replace settings-section with its children, so it doesn't render its own
+-  // "You and Brave" section title inside the getStarted page.
+-  section.replaceWith(...Array.from(section.childNodes))
+-})
+-
+-// We don't support Google sign-in/sync, so hiding the sync account control
+-// promo.
+-mangle((root) => {
+-  const syncAccountControl = root.querySelector('settings-sync-account-control')
+-  if (!syncAccountControl) {
+-    throw new Error(
+-      `[Settings] People page: couldn't find settings-sync-account-control`)
+-  }
+-  syncAccountControl.remove()
+-}, (t) => t.text.includes('<settings-sync-account-control'))
+-
+-// #profile-row lives inside `${this.shouldLinkToProfileRow_() ? html`...` :
+-// ''}`, a nested template -- it isn't reachable from the root template above.
+-mangle((root) => {
+-  const profileRow = root.querySelector('#profile-row')
+-  if (!profileRow) {
+-    throw new Error(`[Settings] People page: couldn't find #profile-row`)
+-  }
+-  profileRow.remove()
+-}, (t) => t.text.includes('id="profile-row"'))
+-
+-// #manage-google-account and #edit-profile ("Profile name and icon") live
+-// inside `${this.signinAllowed_ ? html`...` : ''}`, another nested template.
+-// signinAllowed_ is forced to true by the companion chromium_src/.../
+-// people_page.ts override -- we set signin.allowed to false, which would
+-// otherwise hide both rows, but #edit-profile needs to stay.
+-mangle((root) => {
+-  const manageGoogleAccount = root.querySelector('#manage-google-account')
+-  if (!manageGoogleAccount) {
+-    throw new Error(
+-      `[Settings] People page: couldn't find #manage-google-account`)
+-  }
+-  manageGoogleAccount.remove()
+-
+-  const editProfile = root.querySelector('#edit-profile')
+-  if (!editProfile) {
+-    throw new Error(`[Settings] People page: couldn't find #edit-profile`)
+-  }
+-  editProfile.classList.add('first')
+-}, (t) => t.text.includes('id="manage-google-account"'))
++// Keep Chromium's account, Google services and Sync controls intact.
+diff --git a/chromium_src/chrome/browser/resources/settings/people_page/people_page.ts b/chromium_src/chrome/browser/resources/settings/people_page/people_page.ts
+index c5747379603..5cc01da8ed0 100644
+--- a/chromium_src/chrome/browser/resources/settings/people_page/people_page.ts
++++ b/chromium_src/chrome/browser/resources/settings/people_page/people_page.ts
+@@ -4,34 +4,10 @@
+ // You can obtain one at https://mozilla.org/MPL/2.0/.
+ 
+ import {
+-  SettingsPeoplePageElement as SettingsPeoplePageElementChromium
++  SettingsPeoplePageElement
+ } from './people_page-chromium.js'
+ 
+-class SettingsPeoplePageElement extends SettingsPeoplePageElementChromium {
+-  // We set signin.allowed to false (see
+-  // BraveProfileManager::InitProfileUserPrefs), which would otherwise hide
+-  // both #manage-google-account and #edit-profile ("Profile name and icon").
+-  // The lit_mangler override for this page already removes
+-  // #manage-google-account, but #edit-profile needs to stay, so force this
+-  // true.
+-  //
+-  // signinAllowed_ is `protected` on the upstream class, and re-declaring it
+-  // here (e.g. via `override accessor`) would give it a new declaring class,
+-  // which breaks the protected-member compatibility check TypeScript does
+-  // between this class and the upstream one anywhere both are referenced
+-  // (e.g. the HTMLElementTagNameMap augmentation in the unrenamed upstream
+-  // people_page.ts still points at the upstream class). Setting it in the
+-  // constructor instead avoids introducing a new declaration.
+-  constructor() {
+-    super()
+-    this.signinAllowed_ = true
+-  }
+-}
+-
+-export { SettingsPeoplePageElement }
+ export * from './people_page-chromium.js'
+ 
+-// Register our subclass instead of the upstream class. The matching
+-// `customElements.define` in upstream people_page.ts is patched out.
+ customElements.define(
+   SettingsPeoplePageElement.is, SettingsPeoplePageElement)
+diff --git a/chromium_src/chrome/browser/resources/settings/people_page/sync_account_control.ts b/chromium_src/chrome/browser/resources/settings/people_page/sync_account_control.ts
+index 85e37c436dd..d65e6719a2b 100644
+--- a/chromium_src/chrome/browser/resources/settings/people_page/sync_account_control.ts
++++ b/chromium_src/chrome/browser/resources/settings/people_page/sync_account_control.ts
+@@ -3,43 +3,12 @@
+ // License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ // You can obtain one at https://mozilla.org/MPL/2.0/.
+ 
+-import type { PropertyValues } from '//resources/lit/v3_0/lit.rollup.js'
+-
+ import {
+-  SettingsSyncAccountControlElement as SettingsSyncAccountControlElementChromium
++  SettingsSyncAccountControlElement
+ } from './sync_account_control-chromium.js'
+ 
+-// We don't support Google sign-in/sync, so this promo banner and the
+-// avatar row (both pointing at Google account flows we don't offer) don't
+-// belong anywhere we embed <settings-sync-account-control> (e.g. the
+-// getStarted page).
+-class SettingsSyncAccountControlElement extends
+-    SettingsSyncAccountControlElementChromium {
+-  override willUpdate(changedProperties: PropertyValues<this>) {
+-    super.willUpdate(changedProperties)
+-    this.shouldShowAvatarRow_ = false
+-  }
+-}
+-
+-// shouldHideBanner_ is `protected` on the upstream class. Overriding it as a
+-// real class member would give it a new declaring class, which breaks the
+-// protected-member compatibility check TypeScript does between this class
+-// and the upstream one anywhere both are referenced (e.g. the
+-// HTMLElementTagNameMap augmentation in the unrenamed upstream
+-// sync_account_control.ts still points at the upstream class). Patching the
+-// prototype from outside the class body sidesteps that.
+-const proto = SettingsSyncAccountControlElement.prototype as unknown as {
+-  shouldHideBanner_: () => boolean
+-}
+-
+-proto.shouldHideBanner_ = function() {
+-  return true
+-}
+-
+-export { SettingsSyncAccountControlElement }
+ export * from './sync_account_control-chromium.js'
+ 
+-// Register our subclass instead of the upstream class. The matching
+-// `customElements.define` in upstream sync_account_control.ts is patched out
+ customElements.define(
+-    SettingsSyncAccountControlElement.is, SettingsSyncAccountControlElement)
++    SettingsSyncAccountControlElement.is,
++    SettingsSyncAccountControlElement)
+diff --git a/chromium_src/chrome/browser/signin/chrome_signin_helper.cc b/chromium_src/chrome/browser/signin/chrome_signin_helper.cc
+index e125b969c7c..c03dea62ff3 100644
+--- a/chromium_src/chrome/browser/signin/chrome_signin_helper.cc
++++ b/chromium_src/chrome/browser/signin/chrome_signin_helper.cc
+@@ -3,11 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-// Disable execution path wich previously was under
+-// IsEnabled(kVerifyRequestInitiatorForMirrorHeaders). Now this feature is
+-// removed at upstream and defaulted to true. It is false at Brave.
+-#define BRAVE_PROCESS_MIRROR_HEADERS_IF_FALSE if (false)
+-
+ #include <chrome/browser/signin/chrome_signin_helper.cc>
+-
+-#undef BRAVE_PROCESS_MIRROR_HEADERS_IF_FALSE
+diff --git a/chromium_src/chrome/browser/signin/signin_promo_unittest.cc b/chromium_src/chrome/browser/signin/signin_promo_unittest.cc
+index 689f2fb7fc3..cd30f62f3f6 100644
+--- a/chromium_src/chrome/browser/signin/signin_promo_unittest.cc
++++ b/chromium_src/chrome/browser/signin/signin_promo_unittest.cc
+@@ -4,51 +4,3 @@
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+ #include <chrome/browser/signin/signin_promo_unittest.cc>
+-
+-namespace signin {
+-
+-#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+-
+-// Creating a derived class, so disabling
+-// `ShowSigninPromoTestExplicitBrowserSignin` in filter files won't affect these
+-// disable tests.
+-class ShowSigninPromoTestExplicitBrowserSigninIsDisabled
+-    : public ShowSigninPromoTestWithFeatureFlags {};
+-
+-TEST_F(ShowSigninPromoTestExplicitBrowserSigninIsDisabled,
+-       ShowPromoWithNoAccount) {
+-  EXPECT_FALSE(ShouldShowPasswordSignInPromo(*profile()));
+-}
+-
+-TEST_F(ShowSigninPromoTestExplicitBrowserSigninIsDisabled,
+-       ShowPromoWithWebSignedInAccount) {
+-  MakeAccountAvailable(identity_manager(), "test@email.com");
+-  EXPECT_FALSE(ShouldShowPasswordSignInPromo(*profile()));
+-}
+-
+-TEST_F(ShowSigninPromoTestExplicitBrowserSigninIsDisabled,
+-       ShowPromoWithSignInPendingAccount) {
+-  AccountInfo info = MakePrimaryAccountAvailable(
+-      identity_manager(), "test@email.com", ConsentLevel::kSignin);
+-  signin::SetInvalidRefreshTokenForPrimaryAccount(identity_manager());
+-  EXPECT_FALSE(ShouldShowPasswordSignInPromo(*profile()));
+-}
+-
+-TEST_F(ShowSigninPromoTestExplicitBrowserSigninIsDisabled,
+-       DoNotShowAddressPromo) {
+-  ASSERT_FALSE(ShouldShowAddressSignInPromo(*profile(), CreateAddress()));
+-}
+-
+-TEST_F(ShowSigninPromoTestExplicitBrowserSigninIsDisabled,
+-       DoNotShowBookmarkPromo) {
+-  ASSERT_FALSE(ShouldShowBookmarkSignInPromo(*profile()));
+-}
+-
+-TEST_F(ShowSigninPromoTestExplicitBrowserSigninIsDisabled,
+-       ShowExtensionsPromoWithNoAccount) {
+-  EXPECT_FALSE(ShouldShowExtensionSignInPromo(*profile(), *CreateExtension()));
+-}
+-
+-#endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
+-
+-}  // namespace signin
+diff --git a/chromium_src/chrome/browser/signin/signin_promo_util.cc b/chromium_src/chrome/browser/signin/signin_promo_util.cc
+index c4a4b2350a1..0489996ce42 100644
+--- a/chromium_src/chrome/browser/signin/signin_promo_util.cc
++++ b/chromium_src/chrome/browser/signin/signin_promo_util.cc
+@@ -3,19 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#define SHOULD_SHOW_SIGNIN_PROMO_COMMON return false;
+-#define ShouldShowExtensionSignInPromo ShouldShowExtensionSigninPromo_UnUsed
+ #include <chrome/browser/signin/signin_promo_util.cc>
+-#undef ShouldShowExtensionSignInPromo
+-#undef SHOULD_SHOW_SIGNIN_PROMO_COMMON
+-
+-namespace signin {
+-
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
+-bool ShouldShowExtensionSignInPromo(Profile& profile,
+-                                    const extensions::Extension& extension) {
+-  return false;
+-}
+-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+-
+-}  // namespace signin
+diff --git a/chromium_src/chrome/browser/sync/sync_service_factory.cc b/chromium_src/chrome/browser/sync/sync_service_factory.cc
+index a1a32a6b728..3e212cfc299 100644
+--- a/chromium_src/chrome/browser/sync/sync_service_factory.cc
++++ b/chromium_src/chrome/browser/sync/sync_service_factory.cc
+@@ -3,19 +3,8 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/browser/sync/brave_sync_service_impl_delegate.h"
+-#include "brave/components/sync/service/brave_sync_service_impl.h"
+-#include "chrome/browser/history/history_service_factory.h"
+-#include "chrome/browser/sync/device_info_sync_service_factory.h"
+-
+-#define BRAVE_BUILD_SERVICE_INSTANCE_FOR                        \
+-  std::make_unique<syncer::BraveSyncServiceImpl>(               \
+-      std::move(init_params),                                   \
+-      std::make_unique<syncer::BraveSyncServiceImplDelegate>(   \
+-          DeviceInfoSyncServiceFactory::GetForProfile(profile), \
+-          HistoryServiceFactory::GetForProfile(                 \
+-              profile, ServiceAccessType::IMPLICIT_ACCESS)),    \
+-      g_browser_process->os_crypt_async());
++#define BRAVE_BUILD_SERVICE_INSTANCE_FOR \
++  std::make_unique<syncer::SyncServiceImpl>(std::move(init_params));
+ 
+ #include <chrome/browser/sync/sync_service_factory.cc>
+ 
+diff --git a/chromium_src/chrome/browser/ui/chrome_pages.cc b/chromium_src/chrome/browser/ui/chrome_pages.cc
+index 570fe31f245..83ee0b85340 100644
+--- a/chromium_src/chrome/browser/ui/chrome_pages.cc
++++ b/chromium_src/chrome/browser/ui/chrome_pages.cc
+@@ -3,23 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-// It has caller in the same file
+-#define BRAVE_GET_SETTINGS_URL \
+-  GURL GetSettingsUrl_ChromiumImpl(std::string_view sub_page) {
+-// BRAVE_GET_SETTINGS_URL
+-
+ #include <chrome/browser/ui/chrome_pages.cc>
+-
+-#undef BRAVE_GET_SETTINGS_URL
+-
+-#include "brave/components/constants/webui_url_constants.h"
+-
+-namespace chrome {
+-
+-GURL GetSettingsUrl(std::string_view sub_page) {
+-  if (sub_page == chrome::kSyncSetupSubPage)
+-    return chrome::GetSettingsUrl(kBraveSyncSetupPath);
+-  return GetSettingsUrl_ChromiumImpl(sub_page);
+-}
+-
+-}  // namespace chrome
+diff --git a/chromium_src/chrome/browser/ui/startup/first_run_service.cc b/chromium_src/chrome/browser/ui/startup/first_run_service.cc
+index a6266cdb59e..f706a065add 100644
+--- a/chromium_src/chrome/browser/ui/startup/first_run_service.cc
++++ b/chromium_src/chrome/browser/ui/startup/first_run_service.cc
+@@ -3,33 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include "chrome/browser/ui/startup/first_run_service.h"
+-
+-#include "chrome/browser/profiles/profile_attributes_entry.h"
+-#include "chrome/browser/profiles/profile_attributes_storage.h"
+-#include "chrome/browser/profiles/profile_manager.h"
+-#include "chrome/browser/ui/profiles/profile_customization_util.h"
+-
+-// Because kSigninAllowed is set to false ComputeDevicePolicyEffect returns
+-// PolicyEffect::kDisabled and TryMarkFirstRunAlreadyFinished calls
+-// FinishFirstRun with FinishedReason::kSkippedByPolicies. Because we don't
+-// have primary account, FirstRunService::FinishFirstRun ends up in the code
+-// path that picks enterprise profile name ("Work"). We don't want this
+-// change to happen, so we'll just use original profile name instead.
+-#define FinalizeNewProfileSetup(PROFILE, NAME, IS_DEFAULT_NAME)                \
+-  ProfileAttributesEntry* entry =                                              \
+-      g_browser_process->profile_manager()                                     \
+-          ->GetProfileAttributesStorage()                                      \
+-          .GetProfileAttributesWithPath(profile_->GetPath());                  \
+-  CHECK(entry);                                                                \
+-  std::u16string original_name = entry->GetLocalProfileName();                 \
+-  CHECK(!original_name.empty());                                               \
+-  bool is_default =                                                            \
+-      g_browser_process->profile_manager()                                     \
+-          ->GetProfileAttributesStorage()                                      \
+-          .IsDefaultProfileName(                                               \
+-              original_name, /*include_check_for_legacy_profile_name=*/false); \
+-  FinalizeNewProfileSetup(PROFILE, original_name, is_default)
+-
+ #include <chrome/browser/ui/startup/first_run_service.cc>
+-#undef FinalizeNewProfileSetup
+diff --git a/chromium_src/chrome/browser/ui/startup/first_run_service_browsertest.cc b/chromium_src/chrome/browser/ui/startup/first_run_service_browsertest.cc
+index b4bfbf5c2a7..f75bbf45508 100644
+--- a/chromium_src/chrome/browser/ui/startup/first_run_service_browsertest.cc
++++ b/chromium_src/chrome/browser/ui/startup/first_run_service_browsertest.cc
+@@ -3,21 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/grit/brave_generated_resources.h"
+-#include "chrome/grit/generated_resources.h"
+-
+-// For FirstRunServicePolicyBrowserTest.OpenFirstRunIfNeeded/BrowserSignin_0:
+-// Change test expectation: we don't allow FRE to change profile name to "Work",
+-// so adjust the expected string to be the default profile name
+-// CHROMIUM_SRC_INTERNAL_USE
+-#define IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME_SAVE \
+-  IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME
+-#undef IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME
+-#define IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME \
+-  IDS_PROFILE_MENU_BRAVE_PLACEHOLDER_PROFILE_NAME
+-
+ #include <chrome/browser/ui/startup/first_run_service_browsertest.cc>
+-#undef IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME
+-#define IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME \
+-  IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME_SAVE
+-#undef IDS_SIGNIN_DICE_WEB_INTERCEPT_ENTERPRISE_PROFILE_NAME_SAVE
+diff --git a/chromium_src/chrome/browser/ui/views/profiles/profile_menu_view.cc b/chromium_src/chrome/browser/ui/views/profiles/profile_menu_view.cc
+index 21f8772c374..e15e8c61ada 100644
+--- a/chromium_src/chrome/browser/ui/views/profiles/profile_menu_view.cc
++++ b/chromium_src/chrome/browser/ui/views/profiles/profile_menu_view.cc
+@@ -3,28 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/components/vector_icons/vector_icons.h"
+-#include "chrome/app/vector_icons/vector_icons.h"
+-#include "chrome/browser/ui/views/profiles/profile_menu_view_base.h"
+-#include "ui/gfx/vector_icon_types.h"
+-
+-namespace {
+-
+-ProfileMenuViewBase::IdentitySectionParams BraveAdjustIdentitySectionParams(
+-    ProfileMenuViewBase::IdentitySectionParams params) {
+-  // We never show header, subtitle, or action button.
+-  ProfileMenuViewBase::IdentitySectionParams new_params;
+-  new_params.profile_image = params.profile_image;
+-  new_params.profile_image_padding = params.profile_image_padding;
+-  new_params.title = params.title;
+-  new_params.avatar_ring = params.avatar_ring;
+-  return new_params;
+-}
+-
+-}  // namespace
+-
+-#define SetProfileIdentityWithCallToAction(PARAMS) \
+-  SetProfileIdentityWithCallToAction(BraveAdjustIdentitySectionParams(PARAMS))
+-
+ #include <chrome/browser/ui/views/profiles/profile_menu_view.cc>
+-#undef SetProfileIdentityWithCallToAction
+diff --git a/chromium_src/chrome/browser/ui/webui/settings/people_handler.cc b/chromium_src/chrome/browser/ui/webui/settings/people_handler.cc
+index ddd031a3722..2f79a125cbd 100644
+--- a/chromium_src/chrome/browser/ui/webui/settings/people_handler.cc
++++ b/chromium_src/chrome/browser/ui/webui/settings/people_handler.cc
+@@ -3,28 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/components/sync/service/brave_sync_service_impl.h"
+-
+-// IsSetupInProgress isn't accurate in brave sync flow especially for the first
+-// time setup, we rely on it to display setup dialog
+-#define BRAVE_GET_SYNC_STATUS_DICTIONARY                                       \
+-  sync_status.Set(                                                             \
+-      "firstSetupInProgress",                                                  \
+-      service && !disallowed_by_policy &&                                      \
+-          !service->GetUserSettings()->IsInitialSyncFeatureSetupComplete());   \
+-  {                                                                            \
+-    syncer::BraveSyncServiceImpl* brave_sync_service =                         \
+-        static_cast<syncer::BraveSyncServiceImpl*>(service);                   \
+-    using GetSeedStatusEnum = syncer::BraveSyncServiceImpl::GetSeedStatusEnum; \
+-    if (brave_sync_service) {                                                  \
+-      auto seed = brave_sync_service->GetSeed();                               \
+-      sync_status.Set("hasSyncWordsDecryptionError",                           \
+-                      !seed.has_value() &&                                     \
+-                          seed.error() == GetSeedStatusEnum::kDecryptFailed);  \
+-      sync_status.Set("isOsEncryptionAvailable",                               \
+-                      brave_sync_service->IsEncryptionAvailable());            \
+-    }                                                                          \
+-  }
+-
+ #include <chrome/browser/ui/webui/settings/people_handler.cc>
+-#undef BRAVE_GET_SYNC_STATUS_DICTIONARY
+diff --git a/chromium_src/chrome/browser/ui/webui/signin/profile_picker_ui.cc b/chromium_src/chrome/browser/ui/webui/signin/profile_picker_ui.cc
+index 07d8160e654..3514b713962 100644
+--- a/chromium_src/chrome/browser/ui/webui/signin/profile_picker_ui.cc
++++ b/chromium_src/chrome/browser/ui/webui/signin/profile_picker_ui.cc
+@@ -3,21 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "chrome/browser/ui/webui/signin/profile_picker_ui.h"
+-
+-#include "brave/grit/brave_generated_resources.h"
+-#include "chrome/browser/signin/account_consistency_mode_manager.h"
+-#include "chrome/grit/generated_resources.h"
+-
+-namespace {
+-
+-class BraveAccountConsistencyModeManager {
+- public:
+-  static bool IsDiceSignInAllowed() { return false; }
+-};
+-
+-}  // namespace
+-
+-#define AccountConsistencyModeManager BraveAccountConsistencyModeManager
+ #include <chrome/browser/ui/webui/signin/profile_picker_ui.cc>
+-#undef AccountConsistencyModeManager
+diff --git a/chromium_src/components/browser_sync/DEPS b/chromium_src/components/browser_sync/DEPS
+index 7bf3be7aac7..9c9556e917f 100644
+--- a/chromium_src/components/browser_sync/DEPS
++++ b/chromium_src/components/browser_sync/DEPS
+@@ -1,4 +1 @@
+-include_rules = [
+-  "+brave/components/history/core/browser/sync/brave_history_delete_directives_data_type_controller.h",
+-  "+brave/components/history/core/browser/sync/brave_history_data_type_controller.h",
+-]
++include_rules = []
+diff --git a/chromium_src/components/browser_sync/common_controller_builder.cc b/chromium_src/components/browser_sync/common_controller_builder.cc
+index 311813f0f6d..9bd027e744a 100644
+--- a/chromium_src/components/browser_sync/common_controller_builder.cc
++++ b/chromium_src/components/browser_sync/common_controller_builder.cc
+@@ -3,15 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/components/history/core/browser/sync/brave_history_data_type_controller.h"
+-#include "brave/components/history/core/browser/sync/brave_history_delete_directives_data_type_controller.h"
+-
+-#define HistoryDeleteDirectivesDataTypeController \
+-  BraveHistoryDeleteDirectivesDataTypeController
+-
+-#define HistoryDataTypeController BraveHistoryDataTypeController
+-
+ #include <components/browser_sync/common_controller_builder.cc>
+-
+-#undef HistoryDataTypeController
+-#undef HistoryDeleteDirectivesDataTypeController
+diff --git a/chromium_src/components/signin/internal/identity_manager/primary_account_manager.cc b/chromium_src/components/signin/internal/identity_manager/primary_account_manager.cc
+index 8f7a9b5db45..6fa9b496d83 100644
+--- a/chromium_src/components/signin/internal/identity_manager/primary_account_manager.cc
++++ b/chromium_src/components/signin/internal/identity_manager/primary_account_manager.cc
+@@ -3,11 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "components/signin/internal/identity_manager/primary_account_manager.h"
+-
+-#define RevokeSyncConsent RevokeSyncConsent_ChromiumImpl
+ #include <components/signin/internal/identity_manager/primary_account_manager.cc>
+-#undef RevokeSyncConsent
+-
+-void PrimaryAccountManager::RevokeSyncConsent(
+-    signin_metrics::ProfileSignout source_metric) {}
+diff --git a/chromium_src/components/signin/internal/identity_manager/primary_account_mutator_impl.cc b/chromium_src/components/signin/internal/identity_manager/primary_account_mutator_impl.cc
+index 866ee6c6414..fb31736f06a 100644
+--- a/chromium_src/components/signin/internal/identity_manager/primary_account_mutator_impl.cc
++++ b/chromium_src/components/signin/internal/identity_manager/primary_account_mutator_impl.cc
+@@ -3,16 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "components/signin/internal/identity_manager/primary_account_mutator_impl.h"
+-#include "components/signin/internal/identity_manager/primary_account_manager.h"
+-
+-#define RevokeSyncConsent RevokeSyncConsent_ChromiumImpl
+ #include <components/signin/internal/identity_manager/primary_account_mutator_impl.cc>
+-#undef RevokeSyncConsent
+-
+-namespace signin {
+-
+-void PrimaryAccountMutatorImpl::RevokeSyncConsent(
+-    signin_metrics::ProfileSignout source_metric) {}
+-
+-}  // namespace signin
+diff --git a/chromium_src/components/signin/internal/identity_manager/profile_oauth2_token_service_builder.cc b/chromium_src/components/signin/internal/identity_manager/profile_oauth2_token_service_builder.cc
+index bd2da5dcccc..5867950b088 100644
+--- a/chromium_src/components/signin/internal/identity_manager/profile_oauth2_token_service_builder.cc
++++ b/chromium_src/components/signin/internal/identity_manager/profile_oauth2_token_service_builder.cc
+@@ -3,13 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "components/signin/internal/identity_manager/profile_oauth2_token_service_builder.h"
+-
+-#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+-#include "brave/components/signin/internal/identity_manager/brave_mutable_profile_oauth2_token_service_delegate.h"
+-#endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
+-
+-#define MutableProfileOAuth2TokenServiceDelegate \
+-  BraveMutableProfileOAuth2TokenServiceDelegate
+ #include <components/signin/internal/identity_manager/profile_oauth2_token_service_builder.cc>
+-#undef MutableProfileOAuth2TokenServiceDelegate
+diff --git a/chromium_src/components/signin/public/identity_manager/identity_manager.cc b/chromium_src/components/signin/public/identity_manager/identity_manager.cc
+index 049e87ffe92..038ec425a27 100644
+--- a/chromium_src/components/signin/public/identity_manager/identity_manager.cc
++++ b/chromium_src/components/signin/public/identity_manager/identity_manager.cc
+@@ -3,26 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "components/signin/public/identity_manager/identity_manager.h"
+-
+-#include <utility>
+-#include <vector>
+-
+-#define GetAccountsInCookieJar GetAccountsInCookieJar_Unused
+-#define PrepareForAddingNewAccount PrepareForAddingNewAccount_Unused
+ #include <components/signin/public/identity_manager/identity_manager.cc>
+-#undef PrepareForAddingNewAccount
+-#undef GetAccountsInCookieJar
+-
+-namespace signin {
+-
+-AccountsInCookieJarInfo IdentityManager::GetAccountsInCookieJar() const {
+-  // accounts_in_cookie_jar_info.accounts_are_fresh must be false,
+-  // see `SyncServiceImpl::OnEngineInitialized`
+-  return AccountsInCookieJarInfo(/*accounts_are_fresh=*/false,
+-                                 std::vector<gaia::ListedAccount>());
+-}
+-
+-void IdentityManager::PrepareForAddingNewAccount() {}
+-
+-}  // namespace signin
+diff --git a/chromium_src/components/signin/public/identity_manager/identity_manager_builder.cc b/chromium_src/components/signin/public/identity_manager/identity_manager_builder.cc
+index a9e133c9e59..3c9f2cd8149 100644
+--- a/chromium_src/components/signin/public/identity_manager/identity_manager_builder.cc
++++ b/chromium_src/components/signin/public/identity_manager/identity_manager_builder.cc
+@@ -3,38 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "components/signin/public/identity_manager/identity_manager_builder.h"
+-
+-#define BuildIdentityManager BuildIdentityManager_Unused
+-#define BuildIdentityManagerInitParameters \
+-  BuildIdentityManagerInitParameters_ChromiumImpl
+ #include <components/signin/public/identity_manager/identity_manager_builder.cc>
+-#undef BuildIdentityManagerInitParameters
+-#undef BuildIdentityManager
+-
+-#include "brave/components/signin/internal/identity_manager/brave_primary_account_mutator_impl.h"
+-#include "components/signin/public/identity_manager/identity_manager.h"
+-
+-namespace signin {
+-
+-IdentityManager::InitParameters BuildIdentityManagerInitParameters(
+-    IdentityManagerBuildParams* params) {
+-  IdentityManager::InitParameters init_params =
+-      BuildIdentityManagerInitParameters_ChromiumImpl(params);
+-
+-  init_params.primary_account_mutator =
+-      std::make_unique<BravePrimaryAccountMutatorImpl>(
+-          init_params.account_tracker_service.get(),
+-          init_params.primary_account_manager.get(), params->pref_service,
+-          params->signin_client);
+-
+-  return init_params;
+-}
+-
+-std::unique_ptr<IdentityManager> BuildIdentityManager(
+-    IdentityManagerBuildParams* params) {
+-  return std::make_unique<IdentityManager>(
+-      BuildIdentityManagerInitParameters(params));
+-}
+-
+-}  // namespace signin
+diff --git a/chromium_src/components/sync/base/sync_util.h b/chromium_src/components/sync/base/sync_util.h
+index e4974486673..c1d1fd871be 100644
+--- a/chromium_src/components/sync/base/sync_util.h
++++ b/chromium_src/components/sync/base/sync_util.h
+@@ -6,19 +6,6 @@
+ #ifndef BRAVE_CHROMIUM_SRC_COMPONENTS_SYNC_BASE_SYNC_UTIL_H_
+ #define BRAVE_CHROMIUM_SRC_COMPONENTS_SYNC_BASE_SYNC_UTIL_H_
+ 
+-#include "brave/components/brave_sync/buildflags.h"
+-
+-namespace syncer::internal {
+-inline constexpr char kSyncServerUrl[] = BUILDFLAG(BRAVE_SYNC_ENDPOINT);
+-inline constexpr char kSyncDevServerUrl[] = BUILDFLAG(BRAVE_SYNC_ENDPOINT);
+-}  // namespace syncer::internal
+-
+-#define kSyncServerUrl kSyncServerUrl_ChromiumImpl
+-#define kSyncDevServerUrl kSyncDevServerUrl_ChromiumImpl
+-
+ #include <components/sync/base/sync_util.h>  // IWYU pragma: export
+ 
+-#undef kSyncDevServerUrl
+-#undef kSyncServerUrl
+-
+ #endif  // BRAVE_CHROMIUM_SRC_COMPONENTS_SYNC_BASE_SYNC_UTIL_H_
+diff --git a/chromium_src/components/sync/engine/data_type_registry.cc b/chromium_src/components/sync/engine/data_type_registry.cc
+index a7972b74e5c..f6ce1116dae 100644
+--- a/chromium_src/components/sync/engine/data_type_registry.cc
++++ b/chromium_src/components/sync/engine/data_type_registry.cc
+@@ -3,8 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/components/sync/engine/brave_data_type_worker.h"
+-
+-#define DataTypeWorker BraveDataTypeWorker
+ #include <components/sync/engine/data_type_registry.cc>
+-#undef DataTypeWorker
+diff --git a/chromium_src/components/sync/engine/net/sync_server_connection_manager.cc b/chromium_src/components/sync/engine/net/sync_server_connection_manager.cc
+index 775a208185d..5c4ffc4d2eb 100644
+--- a/chromium_src/components/sync/engine/net/sync_server_connection_manager.cc
++++ b/chromium_src/components/sync/engine/net/sync_server_connection_manager.cc
+@@ -3,24 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include "net/http/http_request_headers.h"
+-
+-// At Connection::PostRequestAndDownloadResponse upstream expects access_token
+-// just as a single string with a single token.
+-// We add own authorization, so `access_token` for us looks as
+-// `token==\r\nBraveServiceKey: braveToken`, see
+-// `BraveSyncAuthManager::GenerateAccessToken`. The new upstream implementation
+-// is not tolerant to `\r\n`.
+-// The override here below uses
+-// `HttpRequestHeaders::AddHeadersFromString` which splits the headers separated
+-// with `\r\n`. So idea of this override is just to act as this patch:
+-// -    headers.SetHeader("Authorization", "Bearer " + access_token);
+-// +    headers.AddHeadersFromString("Authorization: Bearer " + access_token);
+-
+-#define SetHeader(ARG1, ARG2)                                  \
+-  AddHeadersFromString(std::string(ARG1) + std::string(": ") + \
+-                       std::string(ARG2))
+-
+ #include <components/sync/engine/net/sync_server_connection_manager.cc>
+-
+-#undef SetHeader
+diff --git a/chromium_src/components/sync/engine/sync_manager_factory.cc b/chromium_src/components/sync/engine/sync_manager_factory.cc
+index fe8b725e199..042b518945d 100644
+--- a/chromium_src/components/sync/engine/sync_manager_factory.cc
++++ b/chromium_src/components/sync/engine/sync_manager_factory.cc
+@@ -3,8 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+-#include "brave/components/sync/engine/brave_sync_manager_impl.h"
+-
+-#define SyncManagerImpl BraveSyncManagerImpl
+ #include <components/sync/engine/sync_manager_factory.cc>
+-#undef SyncManagerImpl
+diff --git a/chromium_src/components/sync/service/sync_internals_util.cc b/chromium_src/components/sync/service/sync_internals_util.cc
+index 7811bb56f4b..82d1218e866 100644
+--- a/chromium_src/components/sync/service/sync_internals_util.cc
++++ b/chromium_src/components/sync/service/sync_internals_util.cc
+@@ -5,9 +5,6 @@
+ 
+ #include "components/sync/service/sync_internals_util.h"
+ 
+-#include "base/check_op.h"
+-#include "brave/components/sync/service/brave_sync_service_impl.h"
+-
+ #define ConstructAboutInformation ConstructAboutInformation_ChromiumImpl
+ #include <components/sync/service/sync_internals_util.cc>
+ #undef ConstructAboutInformation
+@@ -18,49 +15,8 @@ base::DictValue ConstructAboutInformation(
+     IncludeSensitiveData include_sensitive_data,
+     SyncService* service,
+     const std::string& channel) {
+-  using GetSeedStatusEnum = BraveSyncServiceImpl::GetSeedStatusEnum;
+-  auto about_info = ConstructAboutInformation_ChromiumImpl(
+-      include_sensitive_data, service, channel);
+-
+-  Section section_brave_sync("Brave Sync", /*is_sensitive=*/false);
+-
+-  base::ListValue* details = about_info.FindList(kDetailsKey);
+-  DCHECK_NE(details, nullptr);
+-
+-  BraveSyncServiceImpl* brave_sync_service =
+-      static_cast<BraveSyncServiceImpl*>(service);
+-  auto seed = brave_sync_service->GetSeed();
+-  // If the passphrase has been set, either we can see it or we failed to
+-  // decrypt it
+-  bool is_passphrase_set_val;
+-  if (seed.has_value()) {
+-    is_passphrase_set_val = !seed.value().empty();
+-  } else {
+-    is_passphrase_set_val = seed.error() == GetSeedStatusEnum::kDecryptFailed;
+-  }
+-
+-  Stat<bool>* is_passphrase_set =
+-      section_brave_sync.AddBoolStat("Passphrase is set");
+-  is_passphrase_set->Set(is_passphrase_set_val);
+-  // OSCrypt behavior varies depending on OS. It is possible that
+-  // OSCrypt::IsEncryptionAvailable reports false, but OSCrypt::DecryptString
+-  // succeeds. So put the additional field with actual decryption result.
+-  if (!seed.has_value() && seed.error() == GetSeedStatusEnum::kDecryptFailed) {
+-    Stat<bool>* failed_to_decrypt_passphrase =
+-        section_brave_sync.AddBoolStat("Passphrase decryption failed");
+-    failed_to_decrypt_passphrase->Set(true);
+-  }
+-
+-  Stat<bool>* is_os_encryption_available =
+-      section_brave_sync.AddBoolStat("OS encryption available");
+-  is_os_encryption_available->Set(brave_sync_service->IsEncryptionAvailable());
+-
+-  Stat<std::string>* leave_chain_details =
+-      section_brave_sync.AddStringStat("Leave chain details");
+-  leave_chain_details->Set(brave_sync_service->prefs().GetLeaveChainDetails());
+-
+-  details->Append(section_brave_sync.ToValue());
+-  return about_info;
++  return ConstructAboutInformation_ChromiumImpl(include_sensitive_data, service,
++                                                channel);
+ }
+ 
+ }  // namespace syncer::sync_ui_util
+diff --git a/chromium_src/components/sync/service/sync_service_impl.cc b/chromium_src/components/sync/service/sync_service_impl.cc
+index 6cc89cd60b6..0ab0a4a2db6 100644
+--- a/chromium_src/components/sync/service/sync_service_impl.cc
++++ b/chromium_src/components/sync/service/sync_service_impl.cc
+@@ -3,63 +3,4 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+  * You can obtain one at https://mozilla.org/MPL/2.0/. */
+ 
+-#include "components/sync/service/sync_service_impl.h"
+-
+-#include "base/logging.h"
+-#include "brave/components/brave_sync/brave_sync_prefs.h"
+-#include "brave/components/sync/service/brave_sync_auth_manager.h"
+-#include "brave/components/sync/service/brave_sync_stopped_reporter.h"
+-#include "components/prefs/pref_service.h"
+-#include "components/sync/base/sync_util.h"
+-
+-namespace syncer {
+-
+-GURL BraveGetSyncServiceURL(const base::CommandLine& command_line,
+-                            version_info::Channel channel,
+-                            PrefService* prefs) {
+-  // Allow group policy to override sync service URL.
+-  // This has a higher priority than the --sync-url command-line param.
+-  // https://github.com/brave/brave-browser/issues/20431
+-  if (prefs && prefs->IsManagedPreference(brave_sync::kCustomSyncServiceUrl)) {
+-    std::string value(prefs->GetString(brave_sync::kCustomSyncServiceUrl));
+-    if (!value.empty()) {
+-      GURL custom_sync_url(value);
+-      // Provided URL must be HTTPS.
+-      if (custom_sync_url.is_valid() &&
+-          custom_sync_url.SchemeIs(url::kHttpsScheme)) {
+-        DVLOG(2) << "Sync URL specified via GPO: "
+-                 << prefs->GetString(brave_sync::kCustomSyncServiceUrl);
+-        return custom_sync_url;
+-      } else {
+-        LOG(WARNING) << "The following sync URL specified via GPO "
+-                     << "is invalid: " << value;
+-      }
+-    }
+-  }
+-
+-  // Default logic.
+-  // See `GetSyncServiceURL` in `components/sync/base/sync_util.cc`
+-  return GetSyncServiceURL(command_line, channel);
+-}
+-
+-// Reporting of sync errors is disabled in Brave to prevent the profile avatar
+-// button from providing visual feedback to the user.
+-SyncService::UserActionableError SyncServiceImpl::GetUserActionableError()
+-    const {
+-  return SyncService::UserActionableError::kNone;
+-}
+-
+-}  // namespace syncer
+-
+-#define GetUserActionableError GetUserActionableError_ChromiumImpl
+-#define SyncAuthManager BraveSyncAuthManager
+-#define SyncStoppedReporter BraveSyncStoppedReporter
+-#define GetSyncServiceURL(...) \
+-  BraveGetSyncServiceURL(__VA_ARGS__, sync_client_->GetPrefService())
+-
+ #include <components/sync/service/sync_service_impl.cc>
+-
+-#undef GetUserActionableError
+-#undef SyncAuthManager
+-#undef SyncStoppedReporter
+-#undef GetSyncServiceURL
+diff --git a/chromium_src/components/sync/service/sync_user_settings_impl.cc b/chromium_src/components/sync/service/sync_user_settings_impl.cc
+index 0fcbae78b67..b3c52b9ad06 100644
+--- a/chromium_src/components/sync/service/sync_user_settings_impl.cc
++++ b/chromium_src/components/sync/service/sync_user_settings_impl.cc
+@@ -8,16 +8,11 @@
+ namespace syncer {
+ namespace {
+ 
+-void BraveAdjustPreferredDataTypes(DataTypeSet* types, bool is_local_sync) {
+-  // Unconditional Brave exclusions.
+-  types->Remove(AUTOFILL_VALUABLE);
+-  types->Remove(AUTOFILL_VALUABLE_METADATA);
+-  // Brave types that don't work in local-sync mode (roaming profiles on
+-  // Windows). Listed here rather than inlined into the upstream
+-  // IsLocalSyncEnabled block to keep all Brave-side filtering in one place.
+-  if (is_local_sync) {
+-    types->Remove(AI_CHAT_CONVERSATION);
+-  }
++void BraveAdjustPreferredDataTypes(DataTypeSet* types,
++                                   bool /*is_local_sync*/) {
++  // Google's Sync backend does not know Brave's private AI Chat datatype.
++  // Keep the feature available locally, but never advertise it to Google Sync.
++  types->Remove(AI_CHAT_CONVERSATION);
+ }
+ 
+ }  // namespace
+diff --git a/chromium_src/components/sync_device_info/device_info_sync_bridge.cc b/chromium_src/components/sync_device_info/device_info_sync_bridge.cc
+index 9ef26048243..fc0c0c23881 100644
+--- a/chromium_src/components/sync_device_info/device_info_sync_bridge.cc
++++ b/chromium_src/components/sync_device_info/device_info_sync_bridge.cc
+@@ -42,10 +42,7 @@ constexpr int kFailedAttemtpsToAckDeviceDelete = 5;
+ 
+ std::unique_ptr<DeviceInfoSpecifics> MakeLocalDeviceSpecifics(
+     const DeviceInfo& info) {
+-  std::unique_ptr<DeviceInfoSpecifics> specifics =
+-      MakeLocalDeviceSpecifics_ChromiumImpl(info);
+-  specifics->mutable_brave_fields()->set_is_self_delete_supported(true);
+-  return specifics;
++  return MakeLocalDeviceSpecifics_ChromiumImpl(info);
+ }
+ 
+ }  // namespace
+diff --git a/patches/chrome-browser-resources-settings-people_page-sync_controls.ts.patch b/patches/chrome-browser-resources-settings-people_page-sync_controls.ts.patch
+deleted file mode 100644
+index 6444c4a14eb..00000000000
+--- a/patches/chrome-browser-resources-settings-people_page-sync_controls.ts.patch
++++ /dev/null
+@@ -1,30 +0,0 @@
+-diff --git a/chrome/browser/resources/settings/people_page/sync_controls.ts b/chrome/browser/resources/settings/people_page/sync_controls.ts
+-index 328752afd1152ab3640a99896b571ef0f6a4f103..6f8272265f303ce6c94277a1f5c500022b388b19 100644
+---- a/chrome/browser/resources/settings/people_page/sync_controls.ts
+-+++ b/chrome/browser/resources/settings/people_page/sync_controls.ts
+-@@ -147,7 +147,7 @@ export class SettingsSyncControlsElement extends
+- 
+-     const router = Router.getInstance();
+-     const currentRoute = router.getCurrentRoute();
+--    if (currentRoute === routes.SYNC_ADVANCED) {
+-+    if (currentRoute === routes.BRAVE_SYNC_SETUP) {
+-       this.syncBrowserProxy_.didNavigateToSyncPage();
+-     }
+-     if (currentRoute === routes.ACCOUNT) {
+-@@ -361,6 +361,7 @@ export class SettingsSyncControlsElement extends
+- 
+-   protected disableTypeCheckBox_(dataTypeManaged: boolean|undefined|null):
+-       boolean {
+-+    if (dataTypeManaged) { return true; } if (!this.syncStatus || !this.syncPrefs) { return !!this.syncPrefs?.syncAllDataTypes; }
+-     if (!this.syncStatus) {
+-       return true;
+-     }
+-@@ -370,7 +371,7 @@ export class SettingsSyncControlsElement extends
+-     }
+- 
+-     if (this.syncStatus.signedInState === SignedInState.SYNCING) {
+--      return !!this.syncPrefs?.syncAllDataTypes;
+-+      return this.syncPrefs?.syncAllDataTypes;
+-     }
+- 
+-     // Toggles should be disabled on the account settings page if sync is
+diff --git a/patches/chrome-browser-signin-chrome_signin_helper.cc.patch b/patches/chrome-browser-signin-chrome_signin_helper.cc.patch
+deleted file mode 100644
+index 10e2b6b2ad6..00000000000
+--- a/patches/chrome-browser-signin-chrome_signin_helper.cc.patch
++++ /dev/null
+@@ -1,12 +0,0 @@
+-diff --git a/chrome/browser/signin/chrome_signin_helper.cc b/chrome/browser/signin/chrome_signin_helper.cc
+-index 7375fa82d914bc0c9884075fd6da2c6195a9c68b..9f8eecb04f4355e5acaab68a506892e8da5be84d 100644
+---- a/chrome/browser/signin/chrome_signin_helper.cc
+-+++ b/chrome/browser/signin/chrome_signin_helper.cc
+-@@ -251,6 +251,7 @@ void ProcessMirrorHeader(
+-   // Do not allow non-Google origins to open incognito windows.
+-   // TODO(crbug.com/40064889): Expand this check to all Mirror headers,
+-   //                          regardless of `service_type`.
+-+  BRAVE_PROCESS_MIRROR_HEADERS_IF_FALSE
+-   if (service_type == GAIA_SERVICE_TYPE_INCOGNITO) {
+-     GURL initiator_url =
+-         request_initiator ? request_initiator->GetURL() : GURL();
+diff --git a/patches/chrome-browser-signin-signin_promo_util.cc.patch b/patches/chrome-browser-signin-signin_promo_util.cc.patch
+deleted file mode 100644
+index 9ffbcdfc627..00000000000
+--- a/patches/chrome-browser-signin-signin_promo_util.cc.patch
++++ /dev/null
+@@ -1,12 +0,0 @@
+-diff --git a/chrome/browser/signin/signin_promo_util.cc b/chrome/browser/signin/signin_promo_util.cc
+-index 390c496101fab1332d2fa575e65015dabde19b2b..d572292d98558b60dcd7b3f2ec589fc3a7176cc0 100644
+---- a/chrome/browser/signin/signin_promo_util.cc
+-+++ b/chrome/browser/signin/signin_promo_util.cc
+-@@ -673,6 +673,7 @@ bool CanShowPromoForSyncableDataType(SignInPromoType type, Profile& profile) {
+- // Needs additional checks depending on the type of the promo.
+- // `profile` is the profile of the tab the promo would be shown on.
+- bool ShouldShowSignInPromoCommon(Profile& profile, SignInPromoType type) {
+-+  SHOULD_SHOW_SIGNIN_PROMO_COMMON
+-   if (profile.IsOffTheRecord()) {
+-     return false;
+-   }
+diff --git a/patches/chrome-browser-ui-chrome_pages.cc.patch b/patches/chrome-browser-ui-chrome_pages.cc.patch
+deleted file mode 100644
+index 3766591fdde..00000000000
+--- a/patches/chrome-browser-ui-chrome_pages.cc.patch
++++ /dev/null
+@@ -1,13 +0,0 @@
+-diff --git a/chrome/browser/ui/chrome_pages.cc b/chrome/browser/ui/chrome_pages.cc
+-index 7d078c2241af9d14827e6b5d59967702508d676b..c70d5c79c8d21151c4b9c2e5060de531673f98b4 100644
+---- a/chrome/browser/ui/chrome_pages.cc
+-+++ b/chrome/browser/ui/chrome_pages.cc
+-@@ -437,7 +437,7 @@ void ShowSlow(BrowserWindowInterface* browser) {
+- #endif
+- }
+- 
+--GURL GetSettingsUrl(std::string_view sub_page) {
+-+BRAVE_GET_SETTINGS_URL
+-   return GURL(base::StrCat({kChromeUISettingsURL, sub_page}));
+- }
+- 
+diff --git a/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch b/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch
+index 4580c3a2da4..e4d9b5ff678 100644
+--- a/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch
++++ b/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch
+@@ -2,15 +2,6 @@ diff --git a/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc b/chrome/brows
+ index 96269a9aea8c8947fb1d7a2f1e18d416e59fe568..80e7cc7b86edf10e38826be1ead9ab4843be3a77 100644
+ --- a/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc
+ +++ b/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc
+-@@ -580,7 +580,7 @@ void RecentTabsSubMenuModel::BuildTabsFromOtherDevices() {
+-   std::vector<raw_ptr<const sync_sessions::SyncedSession, VectorExperimental>>
+-       sessions;
+-   if (!open_tabs || !open_tabs->GetAllForeignSessions(&sessions)) {
+--    if (open_tabs) {
+-+    if ((true)) {
+-       AddItemWithStringId(IDC_RECENT_TABS_NO_DEVICE_TABS,
+-                           IDS_RECENT_TABS_NO_DEVICE_TABS);
+-     } else if (syncer::IsReplaceSyncPromosWithSignInPromosEnabled()) {
+ @@ -623,6 +623,8 @@ void RecentTabsSubMenuModel::BuildTabsFromOtherDevices() {
+      DCHECK(!session->GetSessionName().empty());
+      std::unique_ptr<ui::SimpleMenuModel> device_menu_model =
+diff --git a/patches/chrome-browser-ui-webui-settings-people_handler.cc.patch b/patches/chrome-browser-ui-webui-settings-people_handler.cc.patch
+deleted file mode 100644
+index e7110f5ac83..00000000000
+--- a/patches/chrome-browser-ui-webui-settings-people_handler.cc.patch
++++ /dev/null
+@@ -1,28 +0,0 @@
+-diff --git a/chrome/browser/ui/webui/settings/people_handler.cc b/chrome/browser/ui/webui/settings/people_handler.cc
+-index 1169a401e01a6140d010995d3da68db9ba772580..8b41106dc9034c49ffa6a95d392dd4238ca35a55 100644
+---- a/chrome/browser/ui/webui/settings/people_handler.cc
+-+++ b/chrome/browser/ui/webui/settings/people_handler.cc
+-@@ -1169,6 +1169,7 @@ void PeopleHandler::OnSyncShutdown(syncer::SyncService* sync_service) {
+- 
+- void PeopleHandler::BeforeUnloadDialogCancelled() {
+-   // The before unload dialog is only shown during the first sync setup.
+-+  if (false)
+-   DCHECK(IdentityManagerFactory::GetForProfile(profile_)->HasPrimaryAccount(
+-       signin::ConsentLevel::kSync));
+-   syncer::SyncService* service = GetSyncService();
+-@@ -1218,6 +1219,7 @@ base::DictValue PeopleHandler::GetSyncStatusDictionary() const {
+-       service && !disallowed_by_policy && service->IsSetupInProgress() &&
+-           !service->GetUserSettings()->IsInitialSyncFeatureSetupComplete() &&
+-           identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSync));
+-+  BRAVE_GET_SYNC_STATUS_DICTIONARY
+- 
+-   SyncStatusLabels status_labels = GetSyncStatusLabelsForSettings(
+-       SyncServiceFactory::GetForProfile(profile_));
+-@@ -1427,6 +1429,7 @@ void PeopleHandler::MaybeMarkSyncConfiguring() {
+- }
+- 
+- bool PeopleHandler::IsProfileAuthNeededOrHasErrors() {
+-+  return false;
+-   return !IdentityManagerFactory::GetForProfile(profile_)->HasPrimaryAccount(
+-              signin::ConsentLevel::kSync) ||
+-          SigninErrorControllerFactory::GetForProfile(profile_)->HasError();
+diff --git a/patches/components-signin-public-base-signin_switches.cc.patch b/patches/components-signin-public-base-signin_switches.cc.patch
+index a86f75744d1..ff0fb6ad2ac 100644
+--- a/patches/components-signin-public-base-signin_switches.cc.patch
++++ b/patches/components-signin-public-base-signin_switches.cc.patch
+@@ -14,19 +14,3 @@ index 9b5c0e17950f56fcd5643fd5de35640af5132df3..f5068e22fdcfa34227bb4beb88a3870d
+  #endif
+  bool IsFirstRunDesktopRefreshEnabled(bool is_in_search_engine_choice_region) {
+    if (is_in_search_engine_choice_region &&
+-@@ -984,13 +984,8 @@ BASE_FEATURE(kSupportWebSigninAddSession, base::FEATURE_ENABLED_BY_DEFAULT);
+- BASE_FEATURE(kSwitchToIncognitoInSettings, base::FEATURE_DISABLED_BY_DEFAULT);
+- #endif  // BUILDFLAG(IS_ANDROID)
+- 
+--BASE_FEATURE(kSyncEnableBookmarksInTransportMode,
+--#if BUILDFLAG(IS_CHROMEOS)
+--             base::FEATURE_DISABLED_BY_DEFAULT
+--#else
+--             base::FEATURE_ENABLED_BY_DEFAULT
+--#endif
+--);
+-+BASE_OVERRIDDEN_FEATURE(kSyncEnableBookmarksInTransportMode,
+-+base::FEATURE_DISABLED_BY_DEFAULT);
+- 
+- #if BUILDFLAG(IS_CHROMEOS)
+- BASE_FEATURE(kUndoChromeOsUseConsentLevelSignin,
+diff --git a/patches/components-sync-base-features.cc.patch b/patches/components-sync-base-features.cc.patch
+deleted file mode 100644
+index 8e33f49c63f..00000000000
+--- a/patches/components-sync-base-features.cc.patch
++++ /dev/null
+@@ -1,21 +0,0 @@
+-diff --git a/components/sync/base/features.cc b/components/sync/base/features.cc
+-index bfec2bebf2d2b6e8b4e470d5644490d602208917..ec9d3dbe6975e810f7908c6c22910977e09782a8 100644
+---- a/components/sync/base/features.cc
+-+++ b/components/sync/base/features.cc
+-@@ -91,6 +91,7 @@ BASE_FEATURE(kReplaceSyncPromosWithSigninPromosNewSignin,
+- );
+- 
+- bool IsReplaceSyncPromosWithSignInPromosEnabled() {
+-+  if ((true)) return false;
+-   return base::FeatureList::IsEnabled(kReplaceSyncPromosWithSignInPromos) ||
+-          base::FeatureList::IsEnabled(
+-              kReplaceSyncPromosWithSigninPromosNewSignin);
+-@@ -120,7 +121,7 @@ DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAccountSettings);
+- DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAutofillValuable);
+- #endif
+- 
+--DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAutofillValuableMetadata);
+-+BASE_OVERRIDDEN_FEATURE(kSyncAutofillValuableMetadata, base::FEATURE_DISABLED_BY_DEFAULT);
+- 
+- DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncWalletFlightReservations);
+- 
+diff --git a/patches/components-sync-service-sync_auth_manager.cc.patch b/patches/components-sync-service-sync_auth_manager.cc.patch
+deleted file mode 100644
+index 99b45c4c138..00000000000
+--- a/patches/components-sync-service-sync_auth_manager.cc.patch
++++ /dev/null
+@@ -1,16 +0,0 @@
+-diff --git a/components/sync/service/sync_auth_manager.cc b/components/sync/service/sync_auth_manager.cc
+-index 931356eac5f6a76018ba64277c060d3af2b4c960..ddce1e485d57e6e84a09c639d03d442e6b3fc138 100644
+---- a/components/sync/service/sync_auth_manager.cc
+-+++ b/components/sync/service/sync_auth_manager.cc
+-@@ -97,6 +97,11 @@ const SyncAccountInfo& SyncAuthManager::ActiveAccount::Get() const {
+- }
+- 
+- void SyncAuthManager::ActiveAccount::StartDeterminingAccountType() {
+-+  if (!account_info_.account_info.account_id.empty()) {
+-+    account_info_.managed_status =
+-+        signin::AccountManagedStatusFinderOutcome::kConsumerWellKnown;
+-+    return;
+-+  }
+-   if (account_info_.account_info.account_id.empty()) {
+-     managed_status_finder_.reset();
+-     return;
+diff --git a/rewrite/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc.yaml b/rewrite/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc.yaml
+index 0e0e0340c9a..9f3d7b39126 100644
+--- a/rewrite/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc.yaml
++++ b/rewrite/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc.yaml
+@@ -4,19 +4,6 @@
+ # You can obtain one at https://mozilla.org/MPL/2.0/.
+ 
+ substitutions:
+-  - description: |-
+-      Always show the "no device tabs" placeholder.
+-
+-      Brave doesn't offer the "sign in to see tabs from other devices" flow;
+-      always show the same placeholder regardless of sign-in state. i.e.
+-      always fallback to showing the "no device tabs" placeholder.
+-    regex:
+-      re_pattern: |-
+-        (if\ \(!open_tabs\ \|\|\ !open_tabs->GetAllForeignSessions\(&sessions\)\)\ {.*?)if\ \(open_tabs\)
+-      re_flags: [DOTALL]
+-      replace: |-
+-        \1if ((true))
+-
+   - description: |
+       Append a "more tabs" stub item when a device has more tabs than shown.
+     regex:
+diff --git a/rewrite/components/signin/public/base/signin_switches.cc.yaml b/rewrite/components/signin/public/base/signin_switches.cc.yaml
+index ddb75adbc2d..41d5b035bae 100644
+--- a/rewrite/components/signin/public/base/signin_switches.cc.yaml
++++ b/rewrite/components/signin/public/base/signin_switches.cc.yaml
+@@ -15,8 +15,3 @@ substitutions:
+     set_feature_flag_default_state:
+       feature_name: kFirstRunDesktopRefresh
+       value: base::FEATURE_DISABLED_BY_DEFAULT
+-
+-  - description: 'Ship kSyncEnableBookmarksInTransportMode disabled.'
+-    set_feature_flag_default_state:
+-      feature_name: kSyncEnableBookmarksInTransportMode
+-      value: base::FEATURE_DISABLED_BY_DEFAULT
+diff --git a/rewrite/components/sync/base/features.cc.yaml b/rewrite/components/sync/base/features.cc.yaml
+deleted file mode 100644
+index 1308ae715a7..00000000000
+--- a/rewrite/components/sync/base/features.cc.yaml
++++ /dev/null
+@@ -1,31 +0,0 @@
+-# Copyright (c) 2026 The Brave Authors. All rights reserved.
+-# This Source Code Form is subject to the terms of the Mozilla Public
+-# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+-# You can obtain one at https://mozilla.org/MPL/2.0/.
+-
+-substitutions:
+-  - description: |-
+-      Ship kSyncAutofillValuableMetadata disabled.
+-
+-      Doing a manual replacement because `DEFINE_SYNC_AUTOFILL_AI_FEATURE` can
+-      expand in different ways depending on the build flags.
+-    regex:
+-      pattern: 'DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAutofillValuableMetadata);'
+-      replace:
+-        'BASE_OVERRIDDEN_FEATURE(kSyncAutofillValuableMetadata,
+-        base::FEATURE_DISABLED_BY_DEFAULT);'
+-
+-  - description: |-
+-      Override IsReplaceSyncPromosWithSignInPromosEnabled to be always false.
+-
+-      Brave has no Google sign-in, so the sign-in promo variants of the sync UI
+-      never apply. On `brave://history/syncedTabs` they showed a `sign in and
+-      sync history` banner and cleared the list of tabs from other devices on
+-      every identity state update.
+-
+-      This prevents showing sign-in promo on History => Tabs from other devices
+-      page, as Brave has no Google sign-in.
+-    preempt_function_impl:
+-      function_name: IsReplaceSyncPromosWithSignInPromosEnabled
+-      code: |-
+-        if ((true)) return false;
+diff --git a/rewrite/components/sync/service/sync_auth_manager.cc.yaml b/rewrite/components/sync/service/sync_auth_manager.cc.yaml
+deleted file mode 100644
+index b9880f8a283..00000000000
+--- a/rewrite/components/sync/service/sync_auth_manager.cc.yaml
++++ /dev/null
+@@ -1,29 +0,0 @@
+-# Copyright (c) 2026 The Brave Authors. All rights reserved.
+-# This Source Code Form is subject to the terms of the Mozilla Public
+-# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+-# You can obtain one at https://mozilla.org/MPL/2.0/.
+-
+-substitutions:
+-  - description: |
+-      Force a resolved managed status for Brave's fake Sync account.
+-
+-      Brave Sync uses a fake @brave.com account derived from the sync code,
+-      which has no real refresh token in IdentityManager, so
+-      AccountManagedStatusFinder can never resolve its managed status and it
+-      stays kPending forever. Upstream removed kSyncDetermineAccountManagedStatus
+-      (crrev.com/c/8130725), so the SyncServiceImpl gates now unconditionally
+-      block startup while the status is kPending. Resolve it synchronously to a
+-      non-managed consumer value so Sync can start, matching the behavior we
+-      previously got by disabling the feature.
+-
+-      Inserted before upstream's empty-account check, so the condition is
+-      inverted; the empty-account case falls through to the untouched upstream
+-      body.
+-    preempt_function_impl:
+-      function_name: SyncAuthManager::ActiveAccount::StartDeterminingAccountType
+-      code: |-
+-        if (!account_info_.account_info.account_id.empty()) {
+-          account_info_.managed_status =
+-              signin::AccountManagedStatusFinderOutcome::kConsumerWellKnown;
+-          return;
+-        }
+diff --git a/test/filters/components_unittests.filter b/test/filters/components_unittests.filter
+index 8fd714617af..a131bd61cc1 100644
+--- a/test/filters/components_unittests.filter
++++ b/test/filters/components_unittests.filter
+@@ -89,18 +89,6 @@
+ # These tests fail because we disable commerce::kShoppingList
+ -All/ShoppingServiceTest.TestShoppingList*/*
+ 
+-# These tests fail because we override SyncAuthManager::DetermineAccountToUse.
+--SyncServiceImplStartupWithDetermineAccountTypeTest.StartupWithConsumerAccount
+--SyncServiceImplStartupWithDetermineAccountTypeTest.StartupWithManagedAccount
+-
+-# These tests fail because we force a resolved (non-managed) consumer status in
+-# SyncAuthManager::ActiveAccount::StartDeterminingAccountType, skipping
+-# AccountManagedStatusFinder, since Brave Sync uses a fake account with no
+-# refresh token. See brave/rewrite/components/sync/service/sync_auth_manager.cc.yaml.
+--SyncAuthManagerTest.AccountChangeWhileDeterminingAccountType
+--SyncAuthManagerTest.DeterminesAccountTypeAsynchronously
+--SyncAuthManagerTest.DeterminesAccountTypeSynchronously
+-
+ # This test fails because we use different search engine keywords.
+ -SearchEngineChoiceEligibilityTest.ChoiceScreenConditions_SkipFor3p_Waffle
+ 
+diff --git a/test/filters/unit_tests.filter b/test/filters/unit_tests.filter
+index 2b7c1305e25..0a0a16a97ac 100644
+--- a/test/filters/unit_tests.filter
++++ b/test/filters/unit_tests.filter
+@@ -96,7 +96,6 @@
+ -PinnedToolbarActionsContainerTest.*
+ 
+ # Disabling signin promo tests as Brave does not support them.
+--ShowSigninPromoTest*.*
+ -SigninPromoTabHelperTest.*
+ 
+ # This test crashes due to invalid memory access as described in the comment in

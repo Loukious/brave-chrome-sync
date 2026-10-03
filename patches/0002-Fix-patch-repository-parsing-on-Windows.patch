@@ -1,0 +1,22 @@
+From d7fa82889d6c88b1026eb5c5a21261b47799d9a0 Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Fri, 2 Oct 2026 15:31:44 +0100
+Subject: [PATCH 2/4] Fix patch repository parsing on Windows
+
+---
+ build/commands/lib/repositories.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/build/commands/lib/repositories.ts b/build/commands/lib/repositories.ts
+index 05174cdd4e0..61c0084ea89 100644
+--- a/build/commands/lib/repositories.ts
++++ b/build/commands/lib/repositories.ts
+@@ -61,7 +61,7 @@ export function parsePatchedRepositories(
+   filePath: string,
+ ): string[] {
+   const relativePaths: string[] = []
+-  for (const [index, rawLine] of contents.split('\n').entries()) {
++  for (const [index, rawLine] of contents.split(/\r?\n/).entries()) {
+     const lineNumber = index + 1
+     const line = rawLine.replace(/#.*$/, '').trim() // Removing comments.
+     if (line.length === 0) {

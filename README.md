@@ -10,8 +10,9 @@ The source checkout used to create the patches was Brave Nightly **v1.99.8**
 preserved in `patches/series`, including the Windows patch-parser and Wintun
 build fixes. The fifth and sixth patches add GitHub updates to the Windows
 browser in both release and local build configurations. The seventh lets this
-independent release build omit private Brave backend keys.
-No credentials or local browser profiles are included.
+independent release build omit unused Brave backend keys.
+Google credentials and local browser profiles are excluded. The Brave client
+service key is supplied through an Actions secret and compiled into the browser.
 
 ## Automated builds
 
@@ -138,10 +139,10 @@ Brave's Omaha browser updater is disabled through explicit GN arguments.
 Component updates, such as filter lists, are separate from browser executable
 updates. See [update behavior and recovery](docs/UPDATING.md).
 
-The uBlock Origin toggle in Settings downloads a Brave-hosted copy. Independent
-builds without Brave service credentials can receive HTTP 403 from that backend.
-Use the author's official package through `brave://extensions` instead; see
-[uBlock Origin installation](docs/EXTENSIONS.md).
+The uBlock Origin toggle in Settings uses Brave's signed package and original
+extension ID. Builds require the `BRAVE_SERVICES_KEY` Actions secret; the workflow
+checks the authenticated manifest before compilation and again before packaging.
+See [extension service configuration](docs/EXTENSIONS.md).
 
 ## Google credentials
 

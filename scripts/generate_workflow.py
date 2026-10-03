@@ -57,6 +57,23 @@ jobs:
           GH_TOKEN: ${{{{ github.token }}}}
           UPSTREAM_TAG: ${{{{ inputs.upstream_tag }}}}
         run: python scripts/upstream.py --tag "$UPSTREAM_TAG"
+  extension-service:
+    needs: detect
+    if: needs.detect.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: {CHECKOUT}
+        with:
+          persist-credentials: false
+      - uses: {PYTHON}
+        with:
+          python-version: '3.13'
+      - name: Check original Brave-hosted uBlock download
+        env:
+          BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
+          UPSTREAM_TAG: ${{{{ needs.detect.outputs.upstream_tag }}}}
+        run: python scripts/extension_services.py --tag "$UPSTREAM_TAG"
   patches:
     needs: detect
     if: needs.detect.outputs.build == 'true'
@@ -75,8 +92,10 @@ jobs:
           UPSTREAM_SHA: ${{{{ needs.detect.outputs.upstream_sha }}}}
         run: python scripts/prepare.py --root "$RUNNER_TEMP/patch-check" --tag "$UPSTREAM_TAG" --sha "$UPSTREAM_SHA" --patch-only
   prepare:
-    needs: [detect, patches]
+    needs: [detect, patches, extension-service]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
     with:
       mode: prepare
       stage: 0
@@ -93,6 +112,8 @@ jobs:
         header += f"""  build-{stage}:
     needs: [detect, {previous}]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
     with:
       mode: compile
       stage: {stage}

@@ -7,6 +7,7 @@ import shutil
 import subprocess
 
 from upstream import ROOT, series
+from extension_services import service_key
 
 
 def run(*args, cwd=None):
@@ -48,6 +49,7 @@ def write_environment(target, root):
         "projects_chrome_custom_vars_checkout_clang_coverage_tools": False,
         "projects_chrome_custom_vars_checkout_android": False,
         "projects_chrome_custom_vars_checkout_ios": False,
+        "brave_services_key": service_key(),
     }
     (target / ".env").write_text("".join(f"{key}={json.dumps(value)}\n"
                                          for key, value in environment.items()), encoding="utf-8")

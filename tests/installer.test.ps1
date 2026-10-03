@@ -37,8 +37,10 @@ Copy-Item (Join-Path $root "versions/$tag") $newFolder -Recurse
 @{ tag = $newTag; browser = "versions/$newTag/brave.exe"; published_at = '2026-10-03T12:00:00Z' } | ConvertTo-Json | Set-Content (Join-Path $root 'pending.json')
 $restartCapture = Join-Path $root 'restart-arguments.json'
 $helper = Join-Path $root "versions/$tag/SyncUpdater.exe"
+if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { throw 'Fixture parent exited before the relaunch test began.' }
 $restart = Start-Process -FilePath $helper -ArgumentList @('--relaunch', "--parent-pid=$parentPid", '--', "--fixture-args=`"$restartCapture`"", "--user-data-dir=`"$profile`"", '--restore-last-session') -WindowStyle Hidden -PassThru
 Start-Sleep -Milliseconds 500
+if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { throw 'Fixture parent exited before the activation assertion.' }
 if ((Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json).tag -ne $tag) { throw 'Update activated while parent browser was running.' }
 Set-Content $releaseParent 'exit'
 if (-not $restart.WaitForExit(30000) -or $restart.ExitCode -ne 0) { throw 'Relaunch helper failed.' }

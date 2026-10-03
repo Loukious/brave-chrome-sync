@@ -7,7 +7,8 @@ if (pid != null) File.WriteAllText(pid["--fixture-pid=".Length..], Environment.P
 var wait = args.FirstOrDefault(argument => argument.StartsWith("--fixture-wait="));
 if (wait != null)
 {
-    var deadline = DateTime.UtcNow.AddSeconds(60);
+    // Allow copying the self-contained test payload on slower hosted runners.
+    var deadline = DateTime.UtcNow.AddMinutes(5);
     while (!File.Exists(wait["--fixture-wait=".Length..]) && DateTime.UtcNow < deadline)
         Thread.Sleep(100);
 }

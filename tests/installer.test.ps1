@@ -21,4 +21,30 @@ if ((Get-Content (Join-Path $profile 'sentinel.txt') -Raw).Trim() -ne 'profile r
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'Brave Chrome Sync/Brave Chrome Sync.lnk'))
 if ($shortcut.TargetPath -ne $launcher) { throw 'Start Menu shortcut does not use the stable launcher.' }
-Write-Host 'Installer initialized the release; stable launcher preserved arguments and profile; Start Menu shortcut verified.'
+
+# Exercise the same parent-wait/activation route used by the native Relaunch hook.
+$heldCapture = Join-Path $root 'held-browser.json'
+$pidFile = Join-Path $root 'held-browser.pid'
+$releaseParent = Join-Path $root 'release-parent.txt'
+Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$heldCapture`"", "--fixture-pid=`"$pidFile`"", "--fixture-wait=`"$releaseParent`"", "--user-data-dir=`"$profile`"") -WindowStyle Hidden -Wait
+$deadline = [datetime]::UtcNow.AddSeconds(30)
+while (-not (Test-Path $pidFile) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
+$parentPid = [int](Get-Content $pidFile -Raw)
+$newTag = 'v1.99.9-sync.r2.abcdef012345'
+$newFolder = Join-Path $root "versions/$newTag"
+Copy-Item (Join-Path $root "versions/$tag") $newFolder -Recurse
+@{ release_tag = $newTag; channel = 'nightly'; protocol = 1 } | ConvertTo-Json | Set-Content (Join-Path $newFolder 'sync-release.json')
+@{ tag = $newTag; browser = "versions/$newTag/brave.exe"; published_at = '2026-10-03T12:00:00Z' } | ConvertTo-Json | Set-Content (Join-Path $root 'pending.json')
+$restartCapture = Join-Path $root 'restart-arguments.json'
+$helper = Join-Path $root "versions/$tag/SyncUpdater.exe"
+$restart = Start-Process -FilePath $helper -ArgumentList @('--relaunch', "--parent-pid=$parentPid", '--', "--fixture-args=`"$restartCapture`"", "--user-data-dir=`"$profile`"", '--restore-last-session') -WindowStyle Hidden -PassThru
+Start-Sleep -Milliseconds 500
+if ((Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json).tag -ne $tag) { throw 'Update activated while parent browser was running.' }
+Set-Content $releaseParent 'exit'
+if (-not $restart.WaitForExit(30000) -or $restart.ExitCode -ne 0) { throw 'Relaunch helper failed.' }
+$deadline = [datetime]::UtcNow.AddSeconds(30)
+while (-not (Test-Path $restartCapture) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
+$restartArguments = Get-Content $restartCapture -Raw | ConvertFrom-Json
+if ((Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json).tag -ne $newTag -or $restartArguments -notcontains '--restore-last-session') { throw 'Relaunch did not activate the staged version and restore session arguments.' }
+if ((Get-Content (Join-Path $root 'previous.json') -Raw | ConvertFrom-Json).tag -ne $tag -or (Get-Content (Join-Path $profile 'sentinel.txt') -Raw).Trim() -ne 'profile remains') { throw 'Relaunch lost the previous version or profile.' }
+Write-Host 'Installer, shortcuts, argument preservation, parent-exit wait, staged relaunch and profile preservation passed.'

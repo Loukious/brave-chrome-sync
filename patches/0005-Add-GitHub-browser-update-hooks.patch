@@ -1,4 +1,4 @@
-From dd35b5df0266b523a9e389930382c20f4a416776 Mon Sep 17 00:00:00 2001
+From 35628fbf06b5dd6b141aafcd768d412dd29a995c Mon Sep 17 00:00:00 2001
 From: Brave Chrome Sync build <build@users.noreply.github.com>
 Date: Sat, 3 Oct 2026 11:38:10 +0100
 Subject: [PATCH] Add GitHub browser update hooks
@@ -7,12 +7,13 @@ Subject: [PATCH] Add GitHub browser update hooks
  browser/brave_browser_main_parts.cc           |   7 +
  browser/github_updater/BUILD.gn               |   5 +
  browser/github_updater/github_updater.h       |  44 ++++++
+ browser/resources/settings/br/about_page.ts   |   8 +-
  browser/sources.gni                           |   1 +
  browser/ui/webui/help/BUILD.gn                |   4 +
  .../browser/first_run/upgrade_util_win.cc     |  33 ++++
  .../ui/webui/help/version_updater_basic.cc    | 147 ++++++++++++++++++
  .../chrome-browser-first_run-BUILD.gn.patch   |  10 ++
- 8 files changed, 251 insertions(+)
+ 9 files changed, 255 insertions(+), 4 deletions(-)
  create mode 100644 browser/github_updater/BUILD.gn
  create mode 100644 browser/github_updater/github_updater.h
  create mode 100644 chromium_src/chrome/browser/ui/webui/help/version_updater_basic.cc
@@ -104,6 +105,39 @@ index 000000000..1c1c648a9
 +
 +}  // namespace github_updater
 +#endif  // BRAVE_BROWSER_GITHUB_UPDATER_GITHUB_UPDATER_H_
+diff --git a/browser/resources/settings/br/about_page.ts b/browser/resources/settings/br/about_page.ts
+index 40a800a35..ab8201d7b 100644
+--- a/browser/resources/settings/br/about_page.ts
++++ b/browser/resources/settings/br/about_page.ts
+@@ -29,8 +29,8 @@ const buildBraveVersionLink = (braveVersion: string, build: string) => {
+   wrapper.setAttribute('id', 'release-notes')
+   wrapper.setAttribute('target', '_blank')
+   wrapper.setAttribute('rel', 'noopener noreferrer')
+-  wrapper.setAttribute('href', 'https://brave.com/latest/')
+-  wrapper.textContent = `Brave ${braveVersion} ${build}`
++  wrapper.setAttribute('href', 'https://github.com/Loukious/brave-chrome-sync/releases')
++  wrapper.textContent = `Brave Chrome Sync ${braveVersion} ${build}`
+ 
+   return wrapper
+ }
+@@ -59,7 +59,7 @@ const modifyAboutPage = (root: ShadowRoot) => {
+     wrapper.setAttribute('id', 'release-notes')
+     wrapper.setAttribute('target', '_blank')
+     wrapper.setAttribute('rel', 'noopener noreferrer')
+-    wrapper.setAttribute('href', 'https://brave.com/latest/')
++    wrapper.setAttribute('href', 'https://github.com/Loukious/brave-chrome-sync/releases')
+ 
+     const parent = version.parentNode
+     parent?.replaceChild(wrapper, version)
+@@ -79,7 +79,7 @@ const modifyAboutPage = (root: ShadowRoot) => {
+   if (updateStatusMessageLink) {
+     // <if expr="is_win">
+     updateStatusMessageLink.href =
+-      'https://support.brave.app/hc/en-us/articles/360042816611-Why-isn-t-Brave-updating-automatically-on-Windows-'
++      'https://github.com/Loukious/brave-chrome-sync/issues'
+     // </if>
+ 
+     // <if expr="not is_win">
 diff --git a/browser/sources.gni b/browser/sources.gni
 index 4a2020d54..45caa6743 100644
 --- a/browser/sources.gni

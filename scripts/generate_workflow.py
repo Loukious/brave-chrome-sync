@@ -27,7 +27,7 @@ on:
         default: ''
   push:
     branches: [main]
-    paths: ['config.json', 'patches/**', 'scripts/**', 'updater/**', 'installer/**', '.github/workflows/**']
+    paths: ['.gitattributes', 'config.json', 'patches/**', 'scripts/**', 'updater/**', 'installer/**', '.github/workflows/**']
 permissions:
   contents: read
   actions: write

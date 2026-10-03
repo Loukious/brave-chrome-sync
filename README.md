@@ -51,7 +51,7 @@ The design follows the sequential checkpoint approach in
 [ungoogled-chromium-windows](https://github.com/ungoogled-software/ungoogled-chromium-windows).
 It uses two compile workers, one linker, no debug symbols, no PGO/LTO, and the
 portable ZIP target rather than building symbol archives and installers.
-Compilation output is retained between stages at the same `C:\b` path, including
+Compilation output is retained between stages at the same `D:\b` path, including
 source timestamps and pnpm symlinks, so later jobs can continue the build.
 
 Standard hosted runner compute is
@@ -65,7 +65,10 @@ expire after five days, and successful publication removes the final artifact.
 **This does not guarantee that Brave fits on a free runner.** Brave has a larger
 dependency tree than ungoogled Chromium. GitHub documents 16 GB RAM and 14 GB
 SSD storage for standard public Windows runners; a particular image may offer
-more free disk. Initialization, compilation, or checkpoint compression may
+more free disk. The first `windows-2025-vs2026` run showed approximately 29 GiB
+free on C: and 220 GiB on D:, so the build and its caches use D:. This is an
+observed runner allocation, not a guaranteed capacity. Initialization,
+compilation, or checkpoint compression may
 exceed available disk, memory, or the six-hour budget. Full-source checkpoints
 can be large, and Actions artifact storage can incur charges beyond your
 account's allowance. No billing settings or paid runners are enabled by this
@@ -76,7 +79,7 @@ The default runner is `windows-2025-vs2026`, because current Chromium requires
 Visual Studio 2026. Set `runner` in `config.json` to a provisioned Windows runner
 label if hosted capacity proves insufficient. A larger runner requires a
 GitHub billing configuration; a self-hosted runner requires its own machine.
-The checkpoint workflow expects fresh runners with no pre-existing `C:\b`.
+The checkpoint workflow expects fresh runners with no pre-existing `D:\b`.
 No host caches, installed toolchains, or existing output directories are removed
 to gain space.
 

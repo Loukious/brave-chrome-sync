@@ -123,7 +123,7 @@ def smoke_test(root, archive):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["prepare", "compile"], required=True)
-    parser.add_argument("--root", type=Path, default=Path("C:/b"))
+    parser.add_argument("--root", type=Path, default=Path("D:/b"))
     parser.add_argument("--checkpoint", type=Path, default=ROOT / "checkpoint")
     parser.add_argument("--dist", type=Path, default=ROOT / "dist")
     parser.add_argument("--tag", required=True)
@@ -133,11 +133,11 @@ def main():
     args = parser.parse_args()
     config = json.loads((ROOT / "config.json").read_text())
     root = args.root.resolve()
-    if root != Path("C:/b").resolve() or os.name != "nt":
-        raise ValueError("CI checkpoints require the fixed, non-junction Windows path C:/b")
+    if root != Path("D:/b").resolve() or os.name != "nt":
+        raise ValueError("CI checkpoints require the fixed, non-junction Windows path D:/b")
     if args.mode == "prepare":
         if root.exists():
-            raise ValueError("C:/b already exists; use a fresh ephemeral runner")
+            raise ValueError("D:/b already exists; use a fresh ephemeral runner")
         command = ["python", ROOT / "scripts/prepare.py", "--root", root,
                    "--tag", args.tag, "--sha", args.sha]
         result = timed_run(command, ROOT, 240 * 60)

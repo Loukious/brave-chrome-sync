@@ -1,0 +1,91 @@
+From ba034d3abcea27579d42f55f8911c56226535513 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 21:38:44 +0100
+Subject: [PATCH] Launch taskbar browser windows through the stable updater
+
+---
+ .../browser_window_property_manager_win.cc    | 72 +++++++++++++++++++
+ 1 file changed, 72 insertions(+)
+ create mode 100644 chromium_src/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
+
+diff --git a/chromium_src/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc b/chromium_src/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
+new file mode 100644
+index 00000000000..671305c5e3e
+--- /dev/null
++++ b/chromium_src/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
+@@ -0,0 +1,72 @@
++// SPDX-License-Identifier: MPL-2.0
++#include "chrome/browser/ui/views/frame/browser_window_property_manager_win.h"
++
++#include "base/base_paths.h"
++#include "base/command_line.h"
++#include "base/path_service.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/common/channel_info.h"
++#include "chrome/common/chrome_switches.h"
++#include "components/version_info/channel.h"
++#include "ui/base/win/shell.h"
++
++namespace ui::win {
++namespace {
++
++void SetChromeSyncAppDetailsForWindow(
++    const BrowserWindowInterface* browser,
++    const std::wstring& app_id,
++    const base::FilePath& app_icon_path,
++    int app_icon_index,
++    const std::wstring& relaunch_command,
++    const std::wstring& relaunch_display_name,
++    HWND hwnd) {
++  base::FilePath directory;
++  if ((browser->GetType() != BrowserWindowInterface::Type::TYPE_NORMAL &&
++       browser->GetType() != BrowserWindowInterface::Type::TYPE_POPUP) ||
++      !base::PathService::Get(base::DIR_EXE, &directory) ||
++      directory.DirName().BaseName().value() != L"versions") {
++    SetAppDetailsForWindow(app_id, app_icon_path, app_icon_index,
++                           relaunch_command, relaunch_display_name, hwnd);
++    return;
++  }
++  std::wstring channel;
++  switch (chrome::GetChannel()) {
++    case version_info::Channel::STABLE:
++      channel = L"release";
++      break;
++    case version_info::Channel::BETA:
++      channel = L"beta";
++      break;
++    case version_info::Channel::CANARY:
++      channel = L"nightly";
++      break;
++    default:
++      SetAppDetailsForWindow(app_id, app_icon_path, app_icon_index,
++                             relaunch_command, relaunch_display_name, hwnd);
++      return;
++  }
++  const Profile* profile = browser->GetProfile();
++  base::CommandLine command(
++      directory.DirName().DirName().AppendASCII("SyncBrowser.exe"));
++  command.AppendSwitchPath(switches::kUserDataDir, profile->GetPath().DirName());
++  command.AppendSwitchPath(switches::kProfileDirectory,
++                           profile->GetPath().BaseName());
++  if (profile->IsOffTheRecord()) {
++    command.AppendSwitch(switches::kIncognito);
++  }
++  SetAppDetailsForWindow(
++      L"Loukious.BraveChromeSync." + channel,
++      app_icon_path.empty() ? base::CommandLine::ForCurrentProcess()->GetProgram()
++                            : app_icon_path,
++      app_icon_index, command.GetCommandLineString(), L"Brave Chrome Sync", hwnd);
++}
++
++}  // namespace
++}  // namespace ui::win
++
++#define SetAppDetailsForWindow(...) \
++  SetChromeSyncAppDetailsForWindow(view_->browser(), __VA_ARGS__)
++#include <chrome/browser/ui/views/frame/browser_window_property_manager_win.cc>
++#undef SetAppDetailsForWindow
+-- 
+2.55.0.windows.3
+

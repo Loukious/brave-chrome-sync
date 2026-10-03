@@ -13,6 +13,11 @@ and shortcut identity. The default profile is
 `%LOCALAPPDATA%\BraveChromeSync\User Data`, retained across updates and uninstall.
 Direct launches of the packaged browser use this same profile. An explicit
 `--user-data-dir` still selects a separate profile for automation or testing.
+Browser windows register the same Windows application identity as installer
+shortcuts, with a taskbar launch command pointing to `SyncBrowser.exe` and the
+current profile. Pinning a window therefore follows future updates. Installation
+and update activation repair existing pins for this installation, preserving
+their arguments and leaving other applications' pins unchanged.
 
 Nightly, Beta and Release have separate installation identities. Installing
 Release over an earlier Nightly build therefore leaves two Installed Apps

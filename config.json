@@ -4,7 +4,7 @@
   "minimum_upstream_version": "1.99.8",
   "patch_base_tag": "v1.99.8",
   "patch_base_commit": "9cc0476e9506f93ff6921b0afed668d048f07313",
-  "patch_revision": 4,
+  "patch_revision": 5,
   "runner": "windows-2025-vs2026",
   "node_version": "24.x",
   "pnpm_version": "11.11.0",

@@ -15,6 +15,8 @@ The eighth fixes a DevTools context lookup crash when automation discovers a
 tab whose web contents have detached.
 The ninth makes direct launches of the packaged executable use the same profile
 as its shortcuts.
+The tenth registers taskbar windows with the installer's application identity
+and launches pinned windows through the stable launcher.
 Google credentials and local browser profiles are excluded. The Brave client
 service key is supplied through an Actions secret and compiled into the browser.
 

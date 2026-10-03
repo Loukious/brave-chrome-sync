@@ -57,6 +57,7 @@ Type: files; Name: "{app}\background-check.txt"
 Type: files; Name: "{app}\last-check.json"
 Type: files; Name: "{app}\updater-error.txt"
 Type: files; Name: "{app}\scheduled-task-warning.txt"
+Type: files; Name: "{app}\taskbar-warning.txt"
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

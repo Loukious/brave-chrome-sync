@@ -77,6 +77,7 @@ internal static class Program
                 Updater.AtomicWrite(updater.PathInRoot("pending.json"), version, Models.Default.InstalledVersion);
         }
         await updater.ActivateAsync();
+        if (OperatingSystem.IsWindows()) TaskbarPins.Repair(updater);
         await ConfigureTask(updater.Root, false);
     }
 
@@ -94,6 +95,12 @@ internal static class Program
             if (arguments.Contains("--initialize")) { await Initialize(updater, arguments); return 0; }
             if (arguments.Contains("--uninstall")) { await ConfigureTask(root, true); return 0; }
             updater.ReadInstallation();
+            if (arguments.Contains("--repair-taskbar"))
+            {
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+                TaskbarPins.Repair(updater, Option(arguments, "--taskbar-directory"));
+                return 0;
+            }
 
             // The stable shortcut target delegates to the updater in the current version.
             var currentUpdater = Path.Combine(Path.GetDirectoryName(updater.PathInRoot(updater.ReadVersion().Browser))!, "SyncUpdater.exe");

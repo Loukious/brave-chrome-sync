@@ -64,6 +64,7 @@ class PublishTests(unittest.TestCase):
                     "pipeline_commit": "def", "browser_smoke_test": "Chrome/155.0.0.0",
                     "devtools_target_smoke_test": True,
                     "shared_default_profile_smoke_test": True,
+                    "taskbar_launch_smoke_test": True,
                     "gn_args": {"is_official_build": True, "is_debug": False, "is_component_build": False},
                     "native_updater": True, "updater_protocol": 1, "channel": "nightly",
                     "installer": "fixture-windows-x64-setup.exe", "installer_smoke_test": "Chrome/155.0.0.0"}
@@ -95,7 +96,7 @@ class PublishTests(unittest.TestCase):
                     verify(root)
 
     def test_missing_browser_regression_checks_never_publish(self):
-        for field in ["devtools_target_smoke_test", "shared_default_profile_smoke_test"]:
+        for field in ["devtools_target_smoke_test", "shared_default_profile_smoke_test", "taskbar_launch_smoke_test"]:
             with self.subTest(field=field), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 self.make_payload(root)

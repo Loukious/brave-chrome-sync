@@ -269,6 +269,7 @@ public sealed class Updater(string root, HttpClient http)
         AtomicWrite(PathInRoot("previous.json"), current, Models.Default.InstalledVersion);
         AtomicWrite(PathInRoot("current.json"), pending, Models.Default.InstalledVersion);
         File.Delete(PathInRoot("pending.json"));
+        if (OperatingSystem.IsWindows()) TaskbarPins.Repair(this);
     }
 
     public Process StartBrowser(IEnumerable<string> arguments)

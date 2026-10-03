@@ -18,6 +18,8 @@ def verify(root):
         raise ValueError("Browser DevTools target discovery was not smoke tested")
     if metadata.get("shared_default_profile_smoke_test") is not True:
         raise ValueError("Direct launch and shortcut profile sharing was not smoke tested")
+    if metadata.get("taskbar_launch_smoke_test") is not True:
+        raise ValueError("Native taskbar launch command was not smoke tested")
     if metadata.get("native_updater") is not True or metadata.get("updater_protocol") != 1 or not metadata.get("installer_smoke_test"):
         raise ValueError("Native updater and installed browser were not validated")
     installer = metadata.get("installer", "")

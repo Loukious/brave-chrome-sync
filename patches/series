@@ -7,3 +7,4 @@
 0007-Allow-independent-release-builds-without-private-Brave.patch
 0008-Handle-detached-tabs-in-DevTools-context-lookup.patch
 0009-Use-the-launcher-profile-for-direct-package-launches.patch
+0010-Launch-taskbar-browser-windows-through-the-stable-updater.patch

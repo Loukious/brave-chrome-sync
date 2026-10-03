@@ -8,14 +8,19 @@ distribution.
 The source checkout used to create the patches was Brave Nightly **v1.99.8**
 (`9cc0476e9506f93ff6921b0afed668d048f07313`). All four local commits are
 preserved in `patches/series`, including the Windows patch-parser and Wintun
-build fixes. A fifth patch adds GitHub updates to the Windows browser.
+build fixes. The fifth and sixth patches add GitHub updates to the Windows
+browser in both release and local build configurations. The seventh lets this
+independent release build omit private Brave backend keys.
 No credentials or local browser profiles are included.
 
 ## Automated builds
 
 Every day at 04:23 UTC, GitHub Actions finds the newest published version on
-the configured Brave channel. The default is **Nightly**, matching the patch
-base. Updates of the patch/build scripts also trigger a build. You can select
+the configured Brave source channel. The source default is **Nightly**, matching
+the patch base. Our browser ships as **Release**, with orange release branding,
+the full version number, `is_official_build=true`, and non-component binaries.
+Source selection follows Brave Nightly, independently of our release branding.
+Updates of the patch/build scripts also trigger a build. You can select
 a specific published upstream tag with **Actions → Sync Brave, build Windows
 x64, release → Run workflow**.
 
@@ -42,9 +47,9 @@ version, upstream commit, patch digest, and build settings are recorded in
 
 Release tags look like `v1.99.9-sync.r2.0123456789ab`. The suffix identifies the
 patch revision and a digest of the build inputs. Completed identical builds are
-skipped, and published release assets are never overwritten. Nightly and Beta
-are explicitly marked as prereleases, even if upstream incorrectly marks a
-Nightly release as stable.
+skipped, and published release assets are never overwritten. `release_channel`
+controls our installer, update feed and GitHub prerelease flag independently
+of `upstream_channel`, which selects Brave source versions.
 
 ## Resource limits
 
@@ -103,7 +108,7 @@ version after the browser exits, preserving your profile and session.
 Startup and six-hour background checks also stage updates automatically.
 If Windows declines the scheduled task, startup and About checks remain active.
 
-The installer uses `%LOCALAPPDATA%\Programs\BraveChromeSync-nightly` by default
+The installer uses `%LOCALAPPDATA%\Programs\BraveChromeSync-release` by default
 and keeps an independent profile at `%LOCALAPPDATA%\BraveChromeSync\User Data`.
 Updates use verified ZIP payloads from this repository's published releases,
 install versions side by side, retain the previous version, and never replace

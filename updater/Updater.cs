@@ -63,9 +63,12 @@ public sealed class Updater(string root, HttpClient http)
     {
         var version = JsonSerializer.Deserialize(File.ReadAllText(PathInRoot(name)), Models.Default.InstalledVersion)
                       ?? throw new InvalidDataException("Missing installed version");
-        if (!TagPattern.IsMatch(version.Tag) || !version.Browser.StartsWith("versions/", StringComparison.Ordinal) ||
-            !File.Exists(PathInRoot(version.Browser)))
+        if (!TagPattern.IsMatch(version.Tag) || !version.Browser.StartsWith("versions/", StringComparison.Ordinal))
             throw new InvalidDataException("Invalid installed version");
+        var browser = PathInRoot(version.Browser);
+        if (!File.Exists(browser))
+            throw new InvalidDataException($"Installed browser executable is missing: {browser}. " +
+                "Check Windows Security protection history for a quarantine, then repair the installation using its setup installer.");
         return version;
     }
 

@@ -1,0 +1,112 @@
+From 26276550020a54ef3000c1f76494a2cedeab4dcc Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 16:13:41 +0100
+Subject: [PATCH] Allow independent release builds without private Brave keys
+
+---
+ build/service_keys.gni                             | 6 ++++++
+ components/ai_chat/core/common/buildflags/BUILD.gn | 3 ++-
+ components/brave_search/common/buildflags/BUILD.gn | 3 ++-
+ components/constants/BUILD.gn                      | 3 ++-
+ components/speech_to_text/BUILD.gn                 | 3 ++-
+ 5 files changed, 14 insertions(+), 4 deletions(-)
+ create mode 100644 build/service_keys.gni
+
+diff --git a/build/service_keys.gni b/build/service_keys.gni
+new file mode 100644
+index 000000000..6a854c9c8
+--- /dev/null
++++ b/build/service_keys.gni
+@@ -0,0 +1,6 @@
++# SPDX-License-Identifier: MPL-2.0
++declare_args() {
++  # Independent distributions can use release optimization without private
++  # Brave backend credentials. Authenticated services still require valid keys.
++  require_brave_service_keys = true
++}
+diff --git a/components/ai_chat/core/common/buildflags/BUILD.gn b/components/ai_chat/core/common/buildflags/BUILD.gn
+index 5620d71fd..857657fbd 100644
+--- a/components/ai_chat/core/common/buildflags/BUILD.gn
++++ b/components/ai_chat/core/common/buildflags/BUILD.gn
+@@ -6,6 +6,7 @@
+ # TODO(https://github.com/brave/brave-browser/issues/48186): Move to root of
+ # component.
+ 
++import("//brave/build/service_keys.gni")
+ import("//brave/components/brave_origin/buildflags/buildflags.gni")
+ import("//build/buildflag_header.gni")
+ import("buildflags.gni")
+@@ -14,7 +15,7 @@ declare_args() {
+   service_key_aichat = ""
+ }
+ 
+-if (is_official_build) {
++if (is_official_build && require_brave_service_keys) {
+   # Not needed for Brave Origin builds, which ship with AI Chat disabled
+   # (enable_ai_chat = !is_brave_origin_branded).
+   if (!is_brave_origin_branded) {
+diff --git a/components/brave_search/common/buildflags/BUILD.gn b/components/brave_search/common/buildflags/BUILD.gn
+index 258dc6d55..013842252 100644
+--- a/components/brave_search/common/buildflags/BUILD.gn
++++ b/components/brave_search/common/buildflags/BUILD.gn
+@@ -3,13 +3,14 @@
+ # License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ # You can obtain one at https://mozilla.org/MPL/2.0/.
+ 
++import("//brave/build/service_keys.gni")
+ import("//build/buildflag_header.gni")
+ 
+ declare_args() {
+   service_key_search = ""
+ }
+ 
+-if (is_official_build) {
++if (is_official_build && require_brave_service_keys) {
+   assert(service_key_search != "")
+ }
+ 
+diff --git a/components/constants/BUILD.gn b/components/constants/BUILD.gn
+index 2598168d5..dde94e1a0 100644
+--- a/components/constants/BUILD.gn
++++ b/components/constants/BUILD.gn
+@@ -3,6 +3,7 @@
+ # License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ # You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
++import("//brave/build/service_keys.gni")
+ import("//brave/build/config.gni")
+ import("//build/buildflag_header.gni")
+ import("//build/util/branding.gni")
+@@ -12,7 +13,7 @@ declare_args() {
+   brave_services_key = ""
+ }
+ 
+-if (is_official_build) {
++if (is_official_build && require_brave_service_keys) {
+   assert(brave_services_key != "")
+ }
+ 
+diff --git a/components/speech_to_text/BUILD.gn b/components/speech_to_text/BUILD.gn
+index 5a877c70c..3c20c1c5a 100644
+--- a/components/speech_to_text/BUILD.gn
++++ b/components/speech_to_text/BUILD.gn
+@@ -3,6 +3,7 @@
+ # License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ # You can obtain one at https://mozilla.org/MPL/2.0/.
+ 
++import("//brave/build/service_keys.gni")
+ import("//brave/build/config.gni")
+ import("//build/buildflag_header.gni")
+ 
+@@ -10,7 +11,7 @@ declare_args() {
+   service_key_stt = ""
+ }
+ 
+-if (is_official_build) {
++if (is_official_build && require_brave_service_keys) {
+   assert(service_key_stt != "")
+ }
+ 
+-- 
+2.55.0.windows.3
+

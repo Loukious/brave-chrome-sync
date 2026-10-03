@@ -5,7 +5,7 @@ installer creates Start Menu shortcuts, an optional desktop shortcut, an
 uninstaller, and an update task that runs every six hours. It needs no elevation,
 PowerShell installation, .NET installation, or external update server.
 
-The default installation is `%LOCALAPPDATA%\Programs\BraveChromeSync-nightly`.
+The default installation is `%LOCALAPPDATA%\Programs\BraveChromeSync-release`.
 The stable shortcut target is `SyncBrowser.exe`. It delegates to the updater
 bundled with the selected browser version, so future releases can update the
 helper without replacing a running launcher. The installer has its own AppId
@@ -59,16 +59,23 @@ retaining the separate profile.
 
 ## Build and validation
 
-`patches/0005-Add-GitHub-browser-update-hooks.patch` contains the native browser
+The fifth and sixth patches in `patches/series` contain the native browser
 hooks, while `updater/` contains the self-contained .NET helper and `installer/`
 contains the Inno Setup installer. `scripts/package_windows.py` builds both
 release assets and pins the compiler download to a verified SHA-256.
 
-The build deliberately uses `is_official_build=false` to select the customized
-Windows basic updater implementation. `enable_updater=false` and
+The build uses Release configuration, `is_official_build=true`,
+`is_debug=false`, non-component binaries and orange release branding. Both the
+Windows release and basic updater entry points use our GitHub implementation.
+`enable_updater=false` and
 `enable_update_notifications=false` disable Brave's Omaha browser updater.
 Chromium component updates remain separate. An Omaha URL cannot consume
 GitHub's release JSON directly; this helper implements that translation locally.
+
+The independent build sets `require_brave_service_keys=false`; private Brave
+backend credentials are optional during compilation. Services that require
+those credentials still require valid keys at runtime. PGO, LTO and symbol
+archives are disabled to keep the release build within available resources.
 
 Pull-request checks test channel/version selection, checksum failure, archive
 validation, staging/activation, locking and downgrade prevention. A Windows

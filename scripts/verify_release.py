@@ -9,6 +9,9 @@ import zipfile
 
 def verify(root):
     metadata = json.loads((root / "build-metadata.json").read_text())
+    args = metadata.get("gn_args", {})
+    if args.get("is_official_build") is not True or args.get("is_debug") is not False or args.get("is_component_build") is not False:
+        raise ValueError("Browser was not built with Release configuration")
     if not metadata.get("browser_smoke_test"):
         raise ValueError("Packaged browser was not smoke tested")
     if metadata.get("native_updater") is not True or metadata.get("updater_protocol") != 1 or not metadata.get("installer_smoke_test"):
@@ -58,7 +61,7 @@ def verify(root):
             raise ValueError("Browser archive update identity differs from provenance")
     notes = (
         f"Windows x64 installer and portable build based on Brave **{metadata['upstream_tag']}** "
-        f"(Chromium {metadata['chromium_version']}).\n\n"
+        f"({metadata.get('upstream_source_channel', 'upstream')} source; Chromium {metadata['chromium_version']}).\n\n"
         "The restored Google sign-in and Sync patch set was tested successfully by its author. "
         "Use your working Google API/OAuth credentials through runtime environment variables. "
         "The packaged browser passed a headless startup test. Google Sync must still be "

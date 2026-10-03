@@ -115,9 +115,11 @@ def main():
         except urllib.error.HTTPError as error:
             if error.code != 404:
                 raise
-    prefix = release.get("name", "")
-    channel = "nightly" if prefix.startswith("Nightly ") else (
-        "beta" if prefix.startswith("Beta ") else "release")
+    # The upstream source channel and our distribution channel are independent.
+    # Release builds may use the patched Nightly source without dev branding.
+    channel = config["release_channel"]
+    if channel not in ("release", "beta", "nightly"):
+        raise ValueError("Invalid distribution release channel")
     result = {"build": str(not exists).lower(), "upstream_tag": tag,
               "upstream_sha": resolve_commit(tag), "release_tag": release_tag,
               "patch_digest": patch_digest, "channel": channel,

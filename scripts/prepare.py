@@ -40,7 +40,9 @@ def checkout(target, tag, sha, source=None):
 def write_environment(target, root):
     environment = {
         "use_brave_hermetic_toolchain": False,
-        "is_brave_release_build": 0,
+        "is_brave_release_build": 1,
+        "ignore_patch_version_number": False,
+        "projects_chrome_custom_vars_checkout_pgo_profiles": False,
         "cache_dir": str(root / "cache").replace("\\", "/"),
         "projects_chrome_custom_vars_checkout_clangd": False,
         "projects_chrome_custom_vars_checkout_clang_coverage_tools": False,

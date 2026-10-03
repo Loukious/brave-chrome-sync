@@ -138,6 +138,11 @@ Brave's Omaha browser updater is disabled through explicit GN arguments.
 Component updates, such as filter lists, are separate from browser executable
 updates. See [update behavior and recovery](docs/UPDATING.md).
 
+The uBlock Origin toggle in Settings downloads a Brave-hosted copy. Independent
+builds without Brave service credentials can receive HTTP 403 from that backend.
+Use the author's official package through `brave://extensions` instead; see
+[uBlock Origin installation](docs/EXTENSIONS.md).
+
 ## Google credentials
 
 Use the same working credentials you tested, supplied **at runtime**:

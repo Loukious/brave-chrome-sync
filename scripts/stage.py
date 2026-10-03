@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from prepare import run
 from upstream import ROOT, digest
 from package_windows import package_browser
+from checkpoint import create_archive, verify_wasm_vendor
 
 
 def timed_run(command, cwd, seconds):
@@ -40,9 +41,8 @@ def snapshot(root, checkpoint):
     checkpoint.mkdir(parents=True, exist_ok=True)
     # tar preserves hidden files, timestamps and pnpm symlinks. Keeping the whole
     # initialized tree avoids touching inputs and recompiling everything next job.
-    run("tar.exe", "-czf", checkpoint / "state.tar.gz", "--options",
-        "gzip:compression-level=1", "-C", root, ".")
-    print(f"Checkpoint: {(checkpoint / 'state.tar.gz').stat().st_size / 2**30:.2f} GiB")
+    verify_wasm_vendor(root / "src/brave")
+    create_archive(root, checkpoint / "state.tar.gz")
 
 
 def restore(root, checkpoint):
@@ -50,6 +50,7 @@ def restore(root, checkpoint):
         raise ValueError(f"Refusing to restore over existing build tree: {root}")
     root.mkdir(parents=True)
     run("tar.exe", "-xzf", checkpoint / "state.tar.gz", "-C", root)
+    verify_wasm_vendor(root / "src/brave")
     # The downloaded checkpoint is disposable input inside this repository's
     # CI workspace; it is not a compiler cache or build output directory.
     (checkpoint / "state.tar.gz").unlink()

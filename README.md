@@ -56,6 +56,9 @@ portable ZIP compilation target, then packages a small independent Inno Setup
 installer; it avoids Chromium's full installer and symbol archive targets.
 Compilation output is retained between stages at the same `D:\b` path, including
 source timestamps and pnpm symlinks, so later jobs can continue the build.
+Checkpoint creation streams through a binary pipe to avoid Windows tar's
+incorrect archive-self file matches. Tar warnings fail the checkpoint, and
+vendored Cargo file checksums are validated before archiving and after restore.
 
 Standard hosted runner compute is
 [free for public repositories](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).

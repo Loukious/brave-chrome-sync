@@ -40,13 +40,18 @@ class PublishTests(unittest.TestCase):
     def make_payload(self, root):
         metadata = {"release_tag": "v1.99.8-sync.r1.0123456789ab", "upstream_sha": "abc",
                     "patch_digest": "digest", "upstream_tag": "v1.99.8", "chromium_version": "155.0.0.0",
-                    "pipeline_commit": "def", "browser_smoke_test": "Chrome/155.0.0.0"}
+                    "pipeline_commit": "def", "browser_smoke_test": "Chrome/155.0.0.0",
+                    "native_updater": True, "updater_protocol": 1, "channel": "nightly",
+                    "installer": "fixture-windows-x64-setup.exe", "installer_smoke_test": "Chrome/155.0.0.0"}
         (root / "build-metadata.json").write_text(json.dumps(metadata))
         for name in ["patched-brave-core.tar.gz", "LICENSE", "Update-BraveChromeSync.ps1", "Start-BraveChromeSync.ps1"]:
             (root / name).write_text("fixture")
         with zipfile.ZipFile(root / "browser.zip", "w") as stream:
             stream.writestr("brave.exe", "fixture")
             stream.writestr("155/chrome.dll", "fixture")
+            stream.writestr("SyncUpdater.exe", "fixture")
+            stream.writestr("sync-release.json", json.dumps({"release_tag": metadata["release_tag"], "channel": "nightly", "protocol": 1}))
+        (root / metadata["installer"]).write_bytes(b"MZfixture")
         self.write_sums(root)
 
     def write_sums(self, root):

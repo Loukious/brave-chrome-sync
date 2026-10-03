@@ -4,3 +4,5 @@ work/
 dist/
 checkpoint/
 *.log
+**/bin/
+**/obj/

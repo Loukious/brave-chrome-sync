@@ -6,6 +6,31 @@ on:
 permissions:
   contents: read
 jobs:
+  windows-updater:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Exercise update staging, integrity and activation offline
+        run: dotnet run --project tests/updater/Updater.Tests.csproj -p:PublishSingleFile=false -p:PublishTrimmed=false
+      - name: Build fixture browser and real installer
+        shell: pwsh
+        run: |
+          dotnet build tests/fixture/Fixture.csproj -c Release -o work/fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture build failed' }
+          python tests/installer_fixture.py
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+      - name: Install, launch through shortcuts and preserve profile
+        shell: pwsh
+        run: ./tests/installer.test.ps1
   scripts:
     runs-on: ubuntu-latest
     timeout-minutes: 20

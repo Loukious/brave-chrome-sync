@@ -9,9 +9,11 @@ import subprocess
 import time
 import urllib.request
 import zipfile
+from datetime import datetime, timezone
 
 from prepare import run
 from upstream import ROOT, digest
+from package_windows import package_browser
 
 
 def timed_run(command, cwd, seconds):
@@ -58,9 +60,10 @@ def package(root, dist, tag, sha, release_tag, channel):
     candidates = list((root / "src/out/Sync/dist").glob("*.zip"))
     if len(candidates) != 1:
         raise ValueError(f"Expected one browser archive, found: {candidates}")
-    destination = dist / f"brave-chrome-sync-{release_tag}-windows-x64.zip"
-    shutil.copy2(candidates[0], destination)
+    destination, installer = package_browser(candidates[0], dist, release_tag, channel,
+                                             tag, datetime.now(timezone.utc).isoformat())
     smoke = smoke_test(root, destination)
+    installer_smoke = installer_smoke_test(root, installer, release_tag, channel)
     target = root / "src/brave"
     run("git", "archive", "--format=tar.gz", "--prefix=brave-core/",
         f"--output={dist / 'patched-brave-core.tar.gz'}", "HEAD", cwd=target)
@@ -72,8 +75,9 @@ def package(root, dist, tag, sha, release_tag, channel):
                 "patch_digest": digest(), "gn_args": config["gn_args"],
                 "pipeline_commit": os.environ.get("GITHUB_SHA", "local"),
                 "workflow_run": os.environ.get("GITHUB_RUN_ID", "local"),
-                "google_credentials": "runtime only", "native_updater": False,
-                "browser_smoke_test": smoke}
+                "google_credentials": "runtime only", "native_updater": True,
+                "updater_protocol": 1, "installer": installer.name,
+                "installer_smoke_test": installer_smoke, "browser_smoke_test": smoke}
     (dist / "build-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(ROOT / "scripts/Update-BraveChromeSync.ps1", dist)
     shutil.copy2(ROOT / "scripts/Start-BraveChromeSync.ps1", dist)
@@ -94,14 +98,31 @@ def smoke_test(root, archive):
     executables = list(app.rglob("brave.exe")) + list(app.rglob("chrome.exe"))
     if len(executables) != 1:
         raise ValueError("Packaged browser executable is missing or ambiguous")
-    process = subprocess.Popen([str(executables[0]), "--headless", "--no-first-run",
+    return launch_smoke_test(executables[0], profile)
+
+
+def installer_smoke_test(root, installer, release_tag, channel):
+    install = root / "installer-smoke"
+    run(installer, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOICONS",
+        f"/DIR={install}", f"/LOG={root / 'installer-smoke.log'}")
+    identity = json.loads((install / "installation.json").read_text())
+    pointer = json.loads((install / "current.json").read_text())
+    if identity != {"repository": "Loukious/brave-chrome-sync", "channel": channel, "protocol": 1} or pointer["tag"] != release_tag:
+        raise ValueError("Installer did not initialize the correct browser identity")
+    # Launch through the same stable executable used by shortcuts, with an isolated profile.
+    return launch_smoke_test(install / "SyncBrowser.exe", root / "installer-smoke-profile",
+                             launcher=True)
+
+
+def launch_smoke_test(executable, profile, launcher=False):
+    process = subprocess.Popen([str(executable), "--headless", "--no-first-run",
                                 "--disable-gpu", "--disable-background-networking",
                                 "--remote-debugging-port=0", f"--user-data-dir={profile}",
                                 "about:blank"])
     try:
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
-            if process.poll() is not None:
+            if not launcher and process.poll() is not None:
                 raise RuntimeError(f"Packaged browser exited early: {process.returncode}")
             port_file = profile / "DevToolsActivePort"
             if port_file.exists():
@@ -115,6 +136,15 @@ def smoke_test(root, archive):
             time.sleep(1)
         raise RuntimeError("Packaged browser did not start its DevTools endpoint")
     finally:
+        if launcher:
+            # The shortcut launcher exits after starting the browser. Stop only
+            # processes using this smoke test's explicit profile.
+            command = ('Get-CimInstance Win32_Process | Where-Object { '
+                       '$_.Name -in @("brave.exe", "chrome.exe") -and '
+                       '$_.CommandLine -and $_.CommandLine.Contains($env:SMOKE_PROFILE) '
+                       '} | ForEach-Object { taskkill /PID $_.ProcessId /T /F }')
+            subprocess.run(["pwsh", "-NoProfile", "-Command", command],
+                           env={**os.environ, "SMOKE_PROFILE": str(profile)}, check=True)
         if process.poll() is None:
             subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], check=True)
             process.wait(timeout=30)

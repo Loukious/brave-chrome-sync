@@ -27,7 +27,7 @@ on:
         default: ''
   push:
     branches: [main]
-    paths: ['config.json', 'patches/**', 'scripts/**', '.github/workflows/**']
+    paths: ['config.json', 'patches/**', 'scripts/**', 'updater/**', 'installer/**', '.github/workflows/**']
 permissions:
   contents: read
   actions: write
@@ -149,7 +149,7 @@ jobs:
             gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft "${{flags[@]}}" \\
               --title "Brave Chrome Sync [$CHANNEL] $UPSTREAM_TAG" --notes-file dist/release-notes.md
           fi
-          gh release upload "$RELEASE_TAG" dist/*.zip dist/*.tar.gz dist/*.ps1 dist/*.json dist/LICENSE dist/SHA256SUMS --clobber
+          gh release upload "$RELEASE_TAG" dist/*.exe dist/*.zip dist/*.tar.gz dist/*.ps1 dist/*.json dist/LICENSE dist/SHA256SUMS --clobber
           gh release edit "$RELEASE_TAG" --draft=false "${{flags[@]}}"
       - name: Remove published build artifact
         env:

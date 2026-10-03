@@ -2,3 +2,4 @@
 0002-Fix-patch-repository-parsing-on-Windows.patch
 0003-Fix-Wintun-hook-Python-path.patch
 0004-Fix-Wintun-hook-config-import.patch
+0005-Add-GitHub-browser-update-hooks.patch

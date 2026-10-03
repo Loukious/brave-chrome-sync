@@ -1,0 +1,347 @@
+From dd35b5df0266b523a9e389930382c20f4a416776 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 11:38:10 +0100
+Subject: [PATCH] Add GitHub browser update hooks
+
+---
+ browser/brave_browser_main_parts.cc           |   7 +
+ browser/github_updater/BUILD.gn               |   5 +
+ browser/github_updater/github_updater.h       |  44 ++++++
+ browser/sources.gni                           |   1 +
+ browser/ui/webui/help/BUILD.gn                |   4 +
+ .../browser/first_run/upgrade_util_win.cc     |  33 ++++
+ .../ui/webui/help/version_updater_basic.cc    | 147 ++++++++++++++++++
+ .../chrome-browser-first_run-BUILD.gn.patch   |  10 ++
+ 8 files changed, 251 insertions(+)
+ create mode 100644 browser/github_updater/BUILD.gn
+ create mode 100644 browser/github_updater/github_updater.h
+ create mode 100644 chromium_src/chrome/browser/ui/webui/help/version_updater_basic.cc
+ create mode 100644 patches/chrome-browser-first_run-BUILD.gn.patch
+
+diff --git a/browser/brave_browser_main_parts.cc b/browser/brave_browser_main_parts.cc
+index d78b07418..e395ee8f3 100644
+--- a/browser/brave_browser_main_parts.cc
++++ b/browser/brave_browser_main_parts.cc
+@@ -21,6 +21,9 @@
+ #include "brave/components/speedreader/common/buildflags/buildflags.h"
+ #include "brave/components/tor/buildflags/buildflags.h"
+ #include "build/build_config.h"
++#if BUILDFLAG(IS_WIN)
++#include "brave/browser/github_updater/github_updater.h"
++#endif
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/common/chrome_features.h"
+@@ -98,6 +101,10 @@ void ChromeBrowserMainParts::PreBrowserStart() {
+ void ChromeBrowserMainParts::PostBrowserStart() {
+   ChromeBrowserMainParts_ChromiumImpl::PostBrowserStart();
+ 
++#if BUILDFLAG(IS_WIN)
++  github_updater::StartBackgroundCheck();
++#endif
++
+ #if BUILDFLAG(ENABLE_TOR)
+   ProfileManager* profile_manager = g_browser_process->profile_manager();
+   base::FilePath tor_legacy_path =
+diff --git a/browser/github_updater/BUILD.gn b/browser/github_updater/BUILD.gn
+new file mode 100644
+index 000000000..7679a4b20
+--- /dev/null
++++ b/browser/github_updater/BUILD.gn
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: MPL-2.0
++source_set("github_updater") {
++  public = [ "github_updater.h" ]
++  public_deps = [ "//base" ]
++}
+diff --git a/browser/github_updater/github_updater.h b/browser/github_updater/github_updater.h
+new file mode 100644
+index 000000000..1c1c648a9
+--- /dev/null
++++ b/browser/github_updater/github_updater.h
+@@ -0,0 +1,44 @@
++// SPDX-License-Identifier: MPL-2.0
++#ifndef BRAVE_BROWSER_GITHUB_UPDATER_GITHUB_UPDATER_H_
++#define BRAVE_BROWSER_GITHUB_UPDATER_GITHUB_UPDATER_H_
++
++#include "base/base_paths.h"
++#include "base/command_line.h"
++#include "base/files/file_path.h"
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/location.h"
++#include "base/path_service.h"
++#include "base/process/launch.h"
++#include "base/task/thread_pool.h"
++
++namespace github_updater {
++
++inline base::FilePath GetHelper() {
++  base::FilePath directory;
++  if (!base::PathService::Get(base::DIR_EXE, &directory) ||
++      !base::PathExists(directory.AppendASCII("sync-install-root.txt"))) {
++    return {};
++  }
++  auto helper = directory.AppendASCII("SyncUpdater.exe");
++  return base::PathExists(helper) ? helper : base::FilePath();
++}
++
++inline void StartBackgroundCheck() {
++  base::ThreadPool::PostTask(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
++      base::BindOnce([] {
++        auto helper = GetHelper();
++        if (helper.empty()) {
++          return;
++        }
++        base::CommandLine command(helper);
++        command.AppendSwitch("background");
++        base::LaunchOptions options;
++        options.start_hidden = true;
++        base::LaunchProcess(command, options);
++      }));
++}
++
++}  // namespace github_updater
++#endif  // BRAVE_BROWSER_GITHUB_UPDATER_GITHUB_UPDATER_H_
+diff --git a/browser/sources.gni b/browser/sources.gni
+index 4a2020d54..45caa6743 100644
+--- a/browser/sources.gni
++++ b/browser/sources.gni
+@@ -739,6 +739,7 @@ if (enable_widevine) {
+ }
+ 
+ if (is_win) {
++  brave_chrome_browser_deps += [ "//brave/browser/github_updater" ]
+   brave_chrome_browser_sources += [
+     "//brave/browser/brave_shell_integration_win.cc",
+     "//brave/browser/brave_shell_integration_win.h",
+diff --git a/browser/ui/webui/help/BUILD.gn b/browser/ui/webui/help/BUILD.gn
+index 6c7df4816..d2f3032c8 100644
+--- a/browser/ui/webui/help/BUILD.gn
++++ b/browser/ui/webui/help/BUILD.gn
+@@ -11,6 +11,10 @@ import("//brave/browser/updater/buildflags.gni")
+ group("help") {
+   public_deps = [ "//brave/browser:sparkle_buildflags" ]
+ 
++  if (is_win) {
++    public_deps += [ "//brave/browser/github_updater" ]
++  }
++
+   if (is_mac) {
+     # Deps for the includes in the version_updater_mac.mm override.
+     public_deps += [ "//brave/browser/updater:buildflags" ]
+diff --git a/chromium_src/chrome/browser/first_run/upgrade_util_win.cc b/chromium_src/chrome/browser/first_run/upgrade_util_win.cc
+index d17559d66..381091076 100644
+--- a/chromium_src/chrome/browser/first_run/upgrade_util_win.cc
++++ b/chromium_src/chrome/browser/first_run/upgrade_util_win.cc
+@@ -248,4 +248,37 @@ bool InvokeGoogleUpdateForRenameBrave() {
+ 
+ }  // namespace
+ 
++#include "brave/browser/github_updater/github_updater.h"
++#include "chrome/browser/first_run/upgrade_util.h"
++
++#define RelaunchChromeBrowserImpl RelaunchChromeBrowserImpl_ChromiumImpl
+ #include <chrome/browser/first_run/upgrade_util_win.cc>  // IWYU pragma: export
++#undef RelaunchChromeBrowserImpl
++
++namespace upgrade_util {
++
++bool RelaunchChromeBrowserImpl(const base::CommandLine& command_line,
++                               bool force_breakaway_from_job,
++                               bool wait_for_parent) {
++  auto helper = github_updater::GetHelper();
++  if (helper.empty()) {
++    return RelaunchChromeBrowserImpl_ChromiumImpl(
++        command_line, force_breakaway_from_job, wait_for_parent);
++  }
++  base::CommandLine command(helper);
++  command.AppendSwitch("relaunch");
++  command.AppendSwitchASCII("parent-pid",
++                            base::NumberToString(base::GetCurrentProcId()));
++  command.AppendArgNative(L"--");
++  const auto& args = command_line.argv();
++  for (size_t i = 1; i < args.size(); ++i) {
++    command.AppendArgNative(args[i]);
++  }
++  base::LaunchOptions options;
++  options.start_hidden = true;
++  options.force_breakaway_from_job_ = force_breakaway_from_job;
++  options.grant_foreground_privilege = true;
++  return base::LaunchProcess(command, options).IsValid();
++}
++
++}  // namespace upgrade_util
+diff --git a/chromium_src/chrome/browser/ui/webui/help/version_updater_basic.cc b/chromium_src/chrome/browser/ui/webui/help/version_updater_basic.cc
+new file mode 100644
+index 000000000..29ebee23c
+--- /dev/null
++++ b/chromium_src/chrome/browser/ui/webui/help/version_updater_basic.cc
+@@ -0,0 +1,147 @@
++// SPDX-License-Identifier: MPL-2.0
++#include "build/build_config.h"
++
++#if BUILDFLAG(IS_WIN)
++#include <memory>
++#include <optional>
++#include <string>
++#include <utility>
++
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/json/json_reader.h"
++#include "base/memory/weak_ptr.h"
++#include "base/process/launch.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/thread_pool.h"
++#include "base/time/time.h"
++#include "base/timer/timer.h"
++#include "base/values.h"
++#include "brave/browser/github_updater/github_updater.h"
++#include "chrome/browser/ui/webui/help/version_updater.h"
++
++namespace {
++
++base::FilePath LaunchCheck() {
++  auto helper = github_updater::GetHelper();
++  base::FilePath status;
++  if (helper.empty() || !base::CreateTemporaryFile(&status)) {
++    return {};
++  }
++  base::CommandLine command(helper);
++  command.AppendSwitch("check");
++  command.AppendSwitchPath("status-file", status);
++  base::LaunchOptions options;
++  options.start_hidden = true;
++  if (!base::LaunchProcess(command, options).IsValid()) {
++    base::DeleteFile(status);
++    return {};
++  }
++  return status;
++}
++
++std::optional<base::DictValue> ReadStatus(base::FilePath path) {
++  std::string contents;
++  if (!base::ReadFileToStringWithMaxSize(path, &contents, 16384)) {
++    return std::nullopt;
++  }
++  auto value = base::JSONReader::ReadDict(contents, base::JSON_PARSE_RFC);
++  if (value && value->FindBool("done").value_or(false)) {
++    base::DeleteFile(path);
++  }
++  return value;
++}
++
++class GitHubVersionUpdater : public VersionUpdater {
++ public:
++  void CheckForUpdate(StatusCallback callback, PromoteCallback) override {
++    weak_factory_.InvalidateWeakPtrs();
++    timer_.Stop();
++    callback_ = std::move(callback);
++    callback_.Run(CHECKING, 0, false, false, {}, 0, {});
++    deadline_ = base::TimeTicks::Now() + base::Minutes(45);
++    base::ThreadPool::PostTaskAndReplyWithResult(
++        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++        base::BindOnce(&LaunchCheck),
++        base::BindOnce(&GitHubVersionUpdater::OnStarted,
++                       weak_factory_.GetWeakPtr()));
++  }
++
++ private:
++  void OnStarted(base::FilePath path) {
++    if (path.empty()) {
++      callback_.Run(FAILED, 0, false, false, {}, 0,
++                    u"Install Brave Chrome Sync using its GitHub setup installer to enable updates.");
++      return;
++    }
++    status_path_ = std::move(path);
++    reading_ = false;
++    timer_.Start(FROM_HERE, base::Milliseconds(500), this,
++                 &GitHubVersionUpdater::Poll);
++    Poll();
++  }
++
++  void Poll() {
++    if (reading_) {
++      return;
++    }
++    if (base::TimeTicks::Now() > deadline_) {
++      timer_.Stop();
++      callback_.Run(FAILED, 0, false, false, {}, 0,
++                    u"The update check timed out. Try again.");
++      return;
++    }
++    reading_ = true;
++    base::ThreadPool::PostTaskAndReplyWithResult(
++        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++        base::BindOnce(&ReadStatus, status_path_),
++        base::BindOnce(&GitHubVersionUpdater::OnStatus,
++                       weak_factory_.GetWeakPtr()));
++  }
++
++  void OnStatus(std::optional<base::DictValue> value) {
++    reading_ = false;
++    if (!value) {
++      return;
++    }
++    const auto* name = value->FindString("status");
++    if (!name) {
++      return;
++    }
++    Status status = CHECKING;
++    if (*name == "updating") {
++      status = UPDATING;
++    } else if (*name == "ready") {
++      status = NEARLY_UPDATED;
++    } else if (*name == "updated") {
++      status = UPDATED;
++    } else if (*name == "failed") {
++      status = FAILED;
++    }
++    const auto* version = value->FindString("version");
++    const auto* message = value->FindString("message");
++    callback_.Run(status,
++                  status == UPDATING ? value->FindInt("progress").value_or(0) : 0,
++                  false, false, version ? *version : std::string(), 0,
++                  message ? base::UTF8ToUTF16(*message) : std::u16string());
++    if (value->FindBool("done").value_or(false)) {
++      timer_.Stop();
++    }
++  }
++
++  StatusCallback callback_;
++  base::FilePath status_path_;
++  base::TimeTicks deadline_;
++  base::RepeatingTimer timer_;
++  bool reading_ = false;
++  base::WeakPtrFactory<GitHubVersionUpdater> weak_factory_{this};
++};
++
++}  // namespace
++
++std::unique_ptr<VersionUpdater> VersionUpdater::Create(content::WebContents*) {
++  return std::make_unique<GitHubVersionUpdater>();
++}
++#else
++#include <chrome/browser/ui/webui/help/version_updater_basic.cc>
++#endif
+diff --git a/patches/chrome-browser-first_run-BUILD.gn.patch b/patches/chrome-browser-first_run-BUILD.gn.patch
+new file mode 100644
+index 000000000..bb2172567
+--- /dev/null
++++ b/patches/chrome-browser-first_run-BUILD.gn.patch
+@@ -0,0 +1,10 @@
++diff --git a/chrome/browser/first_run/BUILD.gn b/chrome/browser/first_run/BUILD.gn
++--- a/chrome/browser/first_run/BUILD.gn
+++++ b/chrome/browser/first_run/BUILD.gn
++@@ -92,5 +92,6 @@ source_set("impl") {
++     if (is_win) {
+++      deps += [ "//brave/browser/github_updater" ]
++       sources += [
++         "first_run_internal_win.cc",
++         "upgrade_util_win.cc",
++       ]
+-- 
+2.55.0.windows.3
+

@@ -1,0 +1,52 @@
+From a566a4dcaabcba536fa9e53c38438798963904c2 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 21:11:20 +0100
+Subject: [PATCH] Use the launcher profile for direct package launches
+
+---
+ .../chrome/install_static/user_data_dir.cc    | 22 +++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/chromium_src/chrome/install_static/user_data_dir.cc b/chromium_src/chrome/install_static/user_data_dir.cc
+index 3400e1d9fa2..70f1c30a1d4 100644
+--- a/chromium_src/chrome/install_static/user_data_dir.cc
++++ b/chromium_src/chrome/install_static/user_data_dir.cc
+@@ -5,6 +5,8 @@
+ 
+ #include "chrome/install_static/user_data_dir.h"
+ 
++#include <windows.h>
++
+ #include <string>
+ 
+ #include "chrome/install_static/install_util.h"
+@@ -28,6 +30,26 @@ namespace install_static {
+ std::wstring& BraveAppendChromeInstallSubDirectory(const InstallConstants& mode,
+                                                    bool include_suffix,
+                                                    std::wstring* path) {
++  if (include_suffix) {
++    std::wstring executable(32768, L'\0');
++    const DWORD length = GetModuleFileNameW(
++        nullptr, executable.data(), static_cast<DWORD>(executable.size()));
++    if (length && length < executable.size()) {
++      executable.resize(length);
++      const auto separator = executable.find_last_of(L"\\/");
++      if (separator != std::wstring::npos) {
++        executable.resize(separator + 1);
++        executable.append(L"sync-release.json");
++        const DWORD attributes = GetFileAttributesW(executable.c_str());
++        if (attributes != INVALID_FILE_ATTRIBUTES &&
++            !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
++          // Direct launches of our package use the shortcut launcher's profile.
++          path->append(L"BraveChromeSync");
++          return *path;
++        }
++      }
++    }
++  }
+   AppendChromeInstallSubDirectory(mode, include_suffix, path);
+   // Special case to handle the Policy version of the path for Brave.
+   // Brave uses `SOFTWARE\Policies\BraveSoftware\Brave`
+-- 
+2.55.0.windows.3
+

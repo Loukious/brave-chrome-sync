@@ -11,6 +11,10 @@ preserved in `patches/series`, including the Windows patch-parser and Wintun
 build fixes. The fifth and sixth patches add GitHub updates to the Windows
 browser in both release and local build configurations. The seventh lets this
 independent release build omit unused Brave backend keys.
+The eighth fixes a DevTools context lookup crash when automation discovers a
+tab whose web contents have detached.
+The ninth makes direct launches of the packaged executable use the same profile
+as its shortcuts.
 Google credentials and local browser profiles are excluded. The Brave client
 service key is supplied through an Actions secret and compiled into the browser.
 

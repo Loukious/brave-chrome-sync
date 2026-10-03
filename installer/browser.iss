@@ -7,7 +7,7 @@
 AppId={{8B8E92D1-6597-4B94-A8E7-D891D7774315}-{#Channel}
 AppName=Brave Chrome Sync
 AppVersion={#AppVersion}
-AppVerName=Brave Chrome Sync {#ReleaseTag}
+AppVerName=Brave Chrome Sync {#AppVersion}
 AppPublisher=Loukious
 AppPublisherURL=https://github.com/Loukious/brave-chrome-sync
 AppUpdatesURL=https://github.com/Loukious/brave-chrome-sync/releases

@@ -23,6 +23,19 @@ $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'Brave Chrome Sync/Brave Chrome Sync.lnk'))
 if ($shortcut.TargetPath -ne $launcher) { throw 'Start Menu shortcut does not use the stable launcher.' }
 
+$defaultCapture = Join-Path $root 'default-profile-arguments.json'
+$isolatedLocal = Join-Path $root 'isolated-local-appdata'
+$previousLocal = $env:LOCALAPPDATA
+try {
+    $env:LOCALAPPDATA = $isolatedLocal
+    $defaultLauncher = Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$defaultCapture`"") -WindowStyle Hidden -PassThru
+    if (-not $defaultLauncher.WaitForExit(30000) -or $defaultLauncher.ExitCode -ne 0) { throw 'Default profile launcher failed.' }
+} finally { $env:LOCALAPPDATA = $previousLocal }
+$deadline = [datetime]::UtcNow.AddSeconds(30)
+while (-not (Test-Path $defaultCapture) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
+$defaultArguments = Get-Content $defaultCapture -Raw | ConvertFrom-Json
+if ($defaultArguments -notcontains "--user-data-dir=$(Join-Path $isolatedLocal 'BraveChromeSync/User Data')") { throw 'Launcher did not select the shared default profile.' }
+
 # Exercise the same parent-wait/activation route used by the native Relaunch hook.
 $heldCapture = Join-Path $root 'held-browser.json'
 $pidFile = Join-Path $root 'held-browser.pid'

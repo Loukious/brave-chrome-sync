@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import urllib.request
@@ -35,6 +36,30 @@ def compiler():
     return executable
 
 
+def normalize_payload(app):
+    browsers = list(app.rglob("brave.exe")) + list(app.rglob("chrome.exe"))
+    if len(browsers) != 1:
+        raise ValueError("Browser executable is missing or ambiguous")
+    browser = browsers[0]
+    payload = browser.parent
+    libraries = list(payload.rglob("chrome.dll"))
+    if len(libraries) != 1:
+        raise ValueError("Browser DLL is missing or ambiguous")
+    version_dir = libraries[0].parent
+    if version_dir != payload:
+        if version_dir.parent != payload or not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", version_dir.name):
+            raise ValueError("Unexpected browser DLL directory")
+        # Brave repacks Chrome-bin with brave.exe at its root and runtime files
+        # in a Chromium-version folder. Keep the executable, updater and DLLs
+        # together, as required by update validation and Chromium's dev layout.
+        children = list(version_dir.iterdir())
+        if any((payload / child.name).exists() for child in children):
+            raise ValueError("Versioned browser files collide with archive root")
+        for child in children:
+            child.rename(payload / child.name)
+    return browser, payload
+
+
 def package_browser(archive, dist, release_tag, channel, version, published):
     work = ROOT / "work" / f"package-{release_tag}"
     if work.exists():
@@ -42,10 +67,7 @@ def package_browser(archive, dist, release_tag, channel, version, published):
     app = work / "app"
     with zipfile.ZipFile(archive) as stream:
         stream.extractall(app)
-    browsers = list(app.rglob("brave.exe")) + list(app.rglob("chrome.exe"))
-    if len(browsers) != 1:
-        raise ValueError("Browser executable is missing or ambiguous")
-    payload = browsers[0].parent
+    browser, payload = normalize_payload(app)
     publish = work / "updater"
     run("dotnet", "publish", ROOT / "updater/SyncBrowser.csproj", "-c", "Release",
         "-r", "win-x64", "--self-contained", "true", "-o", publish)
@@ -62,7 +84,7 @@ def package_browser(archive, dist, release_tag, channel, version, published):
     shutil.copy2(temporary, destination)
     run(compiler(), f"/DPayloadDir={payload}", f"/DOutputDir={dist}",
         f"/DReleaseTag={release_tag}", f"/DChannel={channel}",
-        f"/DAppVersion={version.lstrip('v')}", f"/DBrowserExe={browsers[0].name}",
+        f"/DAppVersion={version.lstrip('v')}", f"/DBrowserExe={browser.name}",
         f"/DPublishedAt={published}", f"/DLicenseFile={ROOT / 'LICENSE'}",
         ROOT / "installer/browser.iss")
     setup = dist / f"brave-chrome-sync-{release_tag}-windows-x64-setup.exe"

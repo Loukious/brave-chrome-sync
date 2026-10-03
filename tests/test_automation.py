@@ -48,7 +48,7 @@ class PublishTests(unittest.TestCase):
             (root / name).write_text("fixture")
         with zipfile.ZipFile(root / "browser.zip", "w") as stream:
             stream.writestr("brave.exe", "fixture")
-            stream.writestr("155/chrome.dll", "fixture")
+            stream.writestr("chrome.dll", "fixture")
             stream.writestr("SyncUpdater.exe", "fixture")
             stream.writestr("sync-release.json", json.dumps({"release_tag": metadata["release_tag"], "channel": "nightly", "protocol": 1}))
         (root / metadata["installer"]).write_bytes(b"MZfixture")
@@ -76,6 +76,22 @@ class PublishTests(unittest.TestCase):
             self.make_payload(root)
             with patch.dict(os.environ, {"RELEASE_TAG": "wrong"}):
                 with self.assertRaises(ValueError):
+                    verify(root)
+
+    def test_versioned_library_without_normalization_never_publishes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_payload(root)
+            with zipfile.ZipFile(root / "browser.zip") as original:
+                files = {name: original.read(name) for name in original.namelist()}
+            files["155.1.99.8/chrome.dll"] = files.pop("chrome.dll")
+            with zipfile.ZipFile(root / "browser.zip", "w") as stream:
+                for name, data in files.items():
+                    stream.writestr(name, data)
+            self.write_sums(root)
+            with patch.dict(os.environ, {"RELEASE_TAG": "v1.99.8-sync.r1.0123456789ab",
+                                         "UPSTREAM_SHA": "abc", "PATCH_DIGEST": "digest"}):
+                with self.assertRaisesRegex(ValueError, "chrome.dll beside"):
                     verify(root)
 
 

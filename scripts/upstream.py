@@ -56,6 +56,7 @@ def digest():
     hash_value = hashlib.sha256()
     paths = [ROOT / ".gitattributes", ROOT / "config.json", ROOT / "patches/series", *series()]
     paths += sorted((ROOT / "scripts").glob("*.py"))
+    paths += sorted((ROOT / "scripts").glob("*.mjs"))
     paths += sorted((ROOT / "scripts").glob("*.ps1"))
     paths += sorted((ROOT / ".github/workflows").glob("*.yml"))
     paths += sorted((ROOT / "updater").glob("*.cs"))

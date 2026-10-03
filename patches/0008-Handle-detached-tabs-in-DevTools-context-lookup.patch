@@ -1,0 +1,31 @@
+From 14064781832cc81f380b047629db4eb04e7073f3 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 21:01:14 +0100
+Subject: [PATCH] Handle detached tabs in DevTools context lookup
+
+---
+ ...evtools-web_contents_devtools_agent_host.cc.patch | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+ create mode 100644 patches/content-browser-devtools-web_contents_devtools_agent_host.cc.patch
+
+diff --git a/patches/content-browser-devtools-web_contents_devtools_agent_host.cc.patch b/patches/content-browser-devtools-web_contents_devtools_agent_host.cc.patch
+new file mode 100644
+index 00000000000..45181471da0
+--- /dev/null
++++ b/patches/content-browser-devtools-web_contents_devtools_agent_host.cc.patch
+@@ -0,0 +1,12 @@
++diff --git a/content/browser/devtools/web_contents_devtools_agent_host.cc b/content/browser/devtools/web_contents_devtools_agent_host.cc
++index e4d821f85f..2c37158397 100644
++--- a/content/browser/devtools/web_contents_devtools_agent_host.cc
+++++ b/content/browser/devtools/web_contents_devtools_agent_host.cc
++@@ -243,6 +243,7 @@ void WebContentsDevToolsAgentHost::ConnectWebContents(
++ }
++ 
++ BrowserContext* WebContentsDevToolsAgentHost::GetBrowserContext() {
+++  if (!web_contents()) return nullptr;
++   return web_contents()->GetBrowserContext();
++ }
++ 
+-- 
+2.55.0.windows.3
+

@@ -62,6 +62,8 @@ class PublishTests(unittest.TestCase):
         metadata = {"release_tag": "v1.99.8-sync.r1.0123456789ab", "upstream_sha": "abc",
                     "patch_digest": "digest", "upstream_tag": "v1.99.8", "chromium_version": "155.0.0.0",
                     "pipeline_commit": "def", "browser_smoke_test": "Chrome/155.0.0.0",
+                    "devtools_target_smoke_test": True,
+                    "shared_default_profile_smoke_test": True,
                     "gn_args": {"is_official_build": True, "is_debug": False, "is_component_build": False},
                     "native_updater": True, "updater_protocol": 1, "channel": "nightly",
                     "installer": "fixture-windows-x64-setup.exe", "installer_smoke_test": "Chrome/155.0.0.0"}
@@ -89,6 +91,18 @@ class PublishTests(unittest.TestCase):
                                          "UPSTREAM_SHA": "abc", "PATCH_DIGEST": "digest"}):
                 verify(root)
                 (root / "browser.zip").write_bytes(b"tampered")
+                with self.assertRaises(ValueError):
+                    verify(root)
+
+    def test_missing_browser_regression_checks_never_publish(self):
+        for field in ["devtools_target_smoke_test", "shared_default_profile_smoke_test"]:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                self.make_payload(root)
+                metadata = json.loads((root / "build-metadata.json").read_text())
+                del metadata[field]
+                (root / "build-metadata.json").write_text(json.dumps(metadata))
+                self.write_sums(root)
                 with self.assertRaises(ValueError):
                     verify(root)
 

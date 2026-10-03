@@ -277,7 +277,10 @@ public sealed class Updater(string root, HttpClient http)
         foreach (var argument in arguments.Where(a => !a.StartsWith("--wait-for-parent-handle", StringComparison.Ordinal)))
             start.ArgumentList.Add(argument);
         if (!start.ArgumentList.Any(a => a.StartsWith("--user-data-dir", StringComparison.Ordinal)))
-            start.ArgumentList.Add("--user-data-dir=" + Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BraveChromeSync", "User Data"));
+            start.ArgumentList.Add("--user-data-dir=" + Path.Combine(
+                Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local ? local :
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "BraveChromeSync", "User Data"));
         return Process.Start(start) ?? throw new IOException("Could not start the browser");
     }
 }

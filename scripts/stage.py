@@ -83,6 +83,8 @@ def package(root, dist, tag, sha, release_tag, channel):
                 "google_credentials": "runtime only", "native_updater": True,
                 "updater_protocol": 1, "installer": installer.name,
                 "extension_service_manifest_test": extension_service,
+                "devtools_target_smoke_test": True,
+                "shared_default_profile_smoke_test": True,
                 "installer_smoke_test": installer_smoke, "browser_smoke_test": smoke}
     (dist / "build-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(ROOT / "scripts/Update-BraveChromeSync.ps1", dist)
@@ -104,7 +106,9 @@ def smoke_test(root, archive):
     executables = list(app.rglob("brave.exe")) + list(app.rglob("chrome.exe"))
     if len(executables) != 1:
         raise ValueError("Packaged browser executable is missing or ambiguous")
-    return launch_smoke_test(executables[0], profile)
+    result = launch_smoke_test(executables[0], profile)
+    run("node", ROOT / "scripts/smoke_devtools.mjs", executables[0], root / "devtools-smoke-profile")
+    return result
 
 
 def installer_smoke_test(root, installer, release_tag, channel):
@@ -116,8 +120,11 @@ def installer_smoke_test(root, installer, release_tag, channel):
     if identity != {"repository": "Loukious/brave-chrome-sync", "channel": channel, "protocol": 1} or pointer["tag"] != release_tag:
         raise ValueError("Installer did not initialize the correct browser identity")
     # Launch through the same stable executable used by shortcuts, with an isolated profile.
-    return launch_smoke_test(install / "SyncBrowser.exe", root / "installer-smoke-profile",
-                             launcher=True)
+    result = launch_smoke_test(install / "SyncBrowser.exe", root / "installer-smoke-profile",
+                              launcher=True)
+    run("node", ROOT / "scripts/smoke_profile.mjs", install / pointer["browser"],
+        install / "SyncBrowser.exe", root / "profile-smoke-localappdata")
+    return result
 
 
 def launch_smoke_test(executable, profile, launcher=False):

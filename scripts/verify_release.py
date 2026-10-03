@@ -14,6 +14,10 @@ def verify(root):
         raise ValueError("Browser was not built with Release configuration")
     if not metadata.get("browser_smoke_test"):
         raise ValueError("Packaged browser was not smoke tested")
+    if metadata.get("devtools_target_smoke_test") is not True:
+        raise ValueError("Browser DevTools target discovery was not smoke tested")
+    if metadata.get("shared_default_profile_smoke_test") is not True:
+        raise ValueError("Direct launch and shortcut profile sharing was not smoke tested")
     if metadata.get("native_updater") is not True or metadata.get("updater_protocol") != 1 or not metadata.get("installer_smoke_test"):
         raise ValueError("Native updater and installed browser were not validated")
     installer = metadata.get("installer", "")

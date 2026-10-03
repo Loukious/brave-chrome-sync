@@ -8,7 +8,8 @@ distribution.
 The source checkout used to create the patches was Brave Nightly **v1.99.8**
 (`9cc0476e9506f93ff6921b0afed668d048f07313`). All four local commits are
 preserved in `patches/series`, including the Windows patch-parser and Wintun
-build fixes. No credentials or local browser profiles are included.
+build fixes. A fifth patch adds GitHub updates to the Windows browser.
+No credentials or local browser profiles are included.
 
 ## Automated builds
 
@@ -26,7 +27,8 @@ The workflow:
 3. Initializes the matching Chromium source and Brave dependencies.
 4. Builds Windows x64 across up to 16 sequential jobs, each compiling for up to
    210 minutes and then checkpointing the initialized source and build output.
-5. Starts the packaged browser headlessly and checks its DevTools endpoint.
+5. Builds the bundled updater and Windows installer, then starts both the
+   packaged and installed browser headlessly and checks their DevTools endpoints.
 6. Checks archive integrity, SHA-256 checksums, and source provenance, then
    publishes the completed release. Failed or unfinished builds produce no
    public release.
@@ -38,7 +40,7 @@ Brave build is included as `patched-brave-core.tar.gz`; the matching Chromium
 version, upstream commit, patch digest, and build settings are recorded in
 `build-metadata.json`.
 
-Release tags look like `v1.99.9-sync.r1.0123456789ab`. The suffix identifies the
+Release tags look like `v1.99.9-sync.r2.0123456789ab`. The suffix identifies the
 patch revision and a digest of the build inputs. Completed identical builds are
 skipped, and published release assets are never overwritten. Nightly and Beta
 are explicitly marked as prereleases, even if upstream incorrectly marks a
@@ -50,7 +52,8 @@ The design follows the sequential checkpoint approach in
 [Veil-Chromium](https://github.com/Maishan-Inc/Veil-Chromium) and
 [ungoogled-chromium-windows](https://github.com/ungoogled-software/ungoogled-chromium-windows).
 It uses two compile workers, one linker, no debug symbols, no PGO/LTO, and the
-portable ZIP target rather than building symbol archives and installers.
+portable ZIP compilation target, then packages a small independent Inno Setup
+installer; it avoids Chromium's full installer and symbol archive targets.
 Compilation output is retained between stages at the same `D:\b` path, including
 source timestamps and pnpm symlinks, so later jobs can continue the build.
 
@@ -85,44 +88,47 @@ to gain space.
 
 ## Install and update from GitHub
 
-The release contains an unsigned **portable ZIP**, not an installer. You can
-extract it and launch the included browser manually, or use PowerShell 7 and
-the two scripts included with the release:
+Download and run **`brave-chrome-sync-<tag>-windows-x64-setup.exe`** from
+[Releases](https://github.com/Loukious/brave-chrome-sync/releases).
+It installs for your Windows account, adds Start Menu shortcuts and an optional
+desktop shortcut, and enables GitHub updates. No administrator privileges,
+PowerShell installation, or .NET installation are needed.
+
+Open **About Brave** (`brave://settings/help`) to check and download updates.
+The page shows progress and then **Relaunch**. Relaunch selects the staged
+version after the browser exits, preserving your profile and session.
+Startup and six-hour background checks also stage updates automatically.
+If Windows declines the scheduled task, startup and About checks remain active.
+
+The installer uses `%LOCALAPPDATA%\Programs\BraveChromeSync-nightly` by default
+and keeps an independent profile at `%LOCALAPPDATA%\BraveChromeSync\User Data`.
+Updates use verified ZIP payloads from this repository's published releases,
+install versions side by side, retain the previous version, and never replace
+the running executable. The profile is retained across updates and uninstall.
+The binaries are currently unsigned.
+
+For portable use, extract the release ZIP manually, or use PowerShell 7 and
+the two optional scripts included with the release:
 
 ```powershell
 pwsh -File .\Update-BraveChromeSync.ps1
 pwsh -File .\Start-BraveChromeSync.ps1
 ```
 
-The launcher checks GitHub for an update on each start. It selects a completed
-release for the same channel, verifies the browser ZIP against GitHub's
-SHA-256 asset digest, installs into a new version directory, and switches its
-small `current.json` pointer after extraction succeeds. It retains previous
-versions, refuses browser version downgrades, and defers updating while this
-browser is running. An unavailable network falls back to an installed version.
-Partial downloads never replace the current browser. Staging files are retained
-for diagnosis; they can be removed manually once no update is running.
-
-The launcher keeps an independent profile at
-`%LOCALAPPDATA%\BraveChromeSync\User Data`. It does not modify an existing Brave
-installation or register Brave's native updater. Launch through this script
-to get GitHub update checks; double-clicking the browser executable bypasses
-them. A persistent background update service is not installed.
-
-For a custom repository or install location, use updater parameters:
+The PowerShell portable launcher checks at launch and falls back to the installed
+version when offline. The Windows installer provides the About-page experience;
+portable copies without an installer manifest use the script-based update path.
+For custom portable repositories or locations:
 
 ```powershell
 pwsh -File .\Update-BraveChromeSync.ps1 -Repository owner/repo -InstallRoot D:\Browser
 pwsh -File .\Start-BraveChromeSync.ps1 -InstallRoot D:\Browser
 ```
 
-After the first install the launcher uses the repository saved in `current.json`.
-Use a different install root when changing channels or repositories. The native
-Brave browser updater is disabled through explicit GN arguments, so it cannot
-replace the customized browser with stock Brave. Component updates, such as
-filter lists, are separate from browser executable updating.
-
-See [native updater feasibility](docs/UPDATING.md) for integration options.
+The installed updater stays on this repository and its installation channel.
+Brave's Omaha browser updater is disabled through explicit GN arguments.
+Component updates, such as filter lists, are separate from browser executable
+updates. See [update behavior and recovery](docs/UPDATING.md).
 
 ## Google credentials
 
@@ -162,10 +168,11 @@ Change configuration and regenerate the controller workflow:
 python scripts/generate_workflow.py
 python scripts/generate_workflow.py --check
 python -m unittest discover -s tests -v
+dotnet run --project tests/updater/Updater.Tests.csproj -p:PublishSingleFile=false -p:PublishTrimmed=false
 ```
 
-Pull requests run only inexpensive automation tests and patch replay against
-the documented base. Release builds run from `main`; untrusted pull requests
+Pull requests run inexpensive automation tests, native helper and installer
+tests, and patch replay against the documented base. Release builds run from `main`; untrusted pull requests
 cannot publish or access build credentials. Actions are pinned to commit SHAs.
 
 ## Credits and license

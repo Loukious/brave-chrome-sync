@@ -11,6 +11,13 @@ def verify(root):
     metadata = json.loads((root / "build-metadata.json").read_text())
     if not metadata.get("browser_smoke_test"):
         raise ValueError("Packaged browser was not smoke tested")
+    if metadata.get("native_updater") is not True or metadata.get("updater_protocol") != 1 or not metadata.get("installer_smoke_test"):
+        raise ValueError("Native updater and installed browser were not validated")
+    installer = metadata.get("installer", "")
+    if Path(installer).name != installer or not installer.endswith("-windows-x64-setup.exe"):
+        raise ValueError("Invalid installer filename")
+    if (root / installer).read_bytes()[:2] != b"MZ":
+        raise ValueError("Windows installer is missing or invalid")
     for environment, field in [("RELEASE_TAG", "release_tag"), ("UPSTREAM_SHA", "upstream_sha"),
                                ("PATCH_DIGEST", "patch_digest")]:
         if os.environ.get(environment) != metadata[field]:
@@ -26,7 +33,7 @@ def verify(root):
                 raise ValueError(f"Checksum mismatch: {name}")
     files = {p.name for p in root.iterdir() if p.is_file() and p.name != "SHA256SUMS"}
     required = {"build-metadata.json", "patched-brave-core.tar.gz", "LICENSE",
-                "Update-BraveChromeSync.ps1", "Start-BraveChromeSync.ps1"}
+                "Update-BraveChromeSync.ps1", "Start-BraveChromeSync.ps1", installer}
     if not required <= files:
         raise ValueError("Release is missing source, license, or updater scripts")
     if seen != files:
@@ -42,16 +49,24 @@ def verify(root):
             raise ValueError("Missing or ambiguous browser executable")
         if "chrome.dll" not in names:
             raise ValueError("Browser archive is missing chrome.dll")
+        if "syncupdater.exe" not in names or "sync-release.json" not in names:
+            raise ValueError("Browser archive is missing its native updater")
+        marker = next(name for name in archive.namelist() if Path(name).name == "sync-release.json")
+        if json.loads(archive.read(marker)) != {"release_tag": metadata["release_tag"],
+                                               "channel": metadata["channel"], "protocol": 1}:
+            raise ValueError("Browser archive update identity differs from provenance")
     notes = (
-        f"Windows x64 portable build based on Brave **{metadata['upstream_tag']}** "
+        f"Windows x64 installer and portable build based on Brave **{metadata['upstream_tag']}** "
         f"(Chromium {metadata['chromium_version']}).\n\n"
         "The restored Google sign-in and Sync patch set was tested successfully by its author. "
         "Use your working Google API/OAuth credentials through runtime environment variables. "
         "The packaged browser passed a headless startup test. Google Sync must still be "
         "checked with your account and runtime credentials on this new version.\n\n"
-        "Native Brave browser updating is disabled for this portable build. "
-        "Use the included PowerShell 7 launcher/updater for GitHub updates. "
-        "Existing Brave profiles are not used by the launcher.\n\n"
+        "Install the **-setup.exe** asset for shortcuts and automatic GitHub updates. "
+        "About Brave checks, downloads and verifies updates, then offers Relaunch. "
+        "Background checks run at startup and every six hours when Windows permits the scheduled task. "
+        "The installer uses its own profile and preserves it across updates; no PowerShell or .NET installation is required. "
+        "The ZIP and PowerShell scripts remain available for portable use.\n\n"
         "Includes SHA256SUMS, build-metadata.json, and patched-brave-core.tar.gz. "
         "Binaries are unsigned; PGO/LTO and debug symbols are disabled to reduce build resources.\n\n"
         f"Source: https://github.com/brave/brave-core/tree/{metadata['upstream_sha']}\n"

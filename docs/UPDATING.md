@@ -1,57 +1,83 @@
-# Updating the customized browser
+# GitHub browser updates on Windows
 
-## Current implementation
+Install the `-windows-x64-setup.exe` asset from a completed release. The per-user
+installer creates Start Menu shortcuts, an optional desktop shortcut, an
+uninstaller, and an update task that runs every six hours. It needs no elevation,
+PowerShell installation, .NET installation, or external update server.
 
-The CI build passes `enable_updater=false` and
-`enable_update_notifications=false` as explicit GN arguments. Brave's build
-configuration forces its updater on for Release builds before it merges extra
-GN arguments, so a `.env` setting alone is insufficient; this pipeline's
-explicit arguments take precedence.
+The default installation is `%LOCALAPPDATA%\Programs\BraveChromeSync-nightly`.
+The stable shortcut target is `SyncBrowser.exe`. It delegates to the updater
+bundled with the selected browser version, so future releases can update the
+helper without replacing a running launcher. The installer has its own AppId
+and shortcut identity. The default profile is
+`%LOCALAPPDATA%\BraveChromeSync\User Data`, retained across updates and uninstall.
 
-The portable GitHub updater is independent of the browser executable. It uses
-the GitHub Releases API, requires the API-provided SHA-256 digest for the ZIP,
-checks the archive, and installs versions side by side. The launcher checks on
-startup. Integrity is rooted in HTTPS and the selected GitHub repository; this
-does not add an independent publisher signature. There is no background
-service and `brave://settings/help` does not install GitHub releases.
+## About page and background checks
 
-Browser executable updates and Chromium component updates are distinct. The
-pipeline disables the native browser updater, not the component update client.
+The Windows `VersionUpdater` override connects `brave://settings/help` to
+GitHub Releases. It reports Chromium's existing Checking, Updating, Up to date,
+failure, and Relaunch states, including download progress. Blocking network,
+extraction and file operations run in the separate helper; the browser polls
+its status on a worker thread.
 
-## Why changing an endpoint is insufficient
+Browser startup also starts a quiet check, throttled to once every five hours.
+The six-hour Windows scheduled task checks while the browser is closed or open.
+If Windows policy declines task creation, startup and About checks still work;
+`scheduled-task-warning.txt` records that condition. Checks use public GitHub
+API access and can temporarily fail because of connectivity or GitHub rate
+limits. Such failures leave the installed browser usable, and About can retry.
 
-At the patch base, `chromium_src/chrome/updater/branding.gni` declares
-`update_check_url` as
-`https://updates.bravesoftware.com/prod/service/update2/json`.
-That is an Omaha protocol endpoint, not a list of releases. The updater expects
-an application-specific update response, package metadata, install actions,
-and the associated updater trust configuration. GitHub's release JSON does not
-have that contract. Pointing `update_check_url` at GitHub's API will therefore
-not make the native updater work.
+Updates are selected from published releases of `Loukious/brave-chrome-sync`
+for the installed channel. Nightly and Beta are kept separate from stable.
+Numeric browser version and patch revision take precedence; publication time
+orders rebuilds of the same version/revision. Drafts, foreign asset URLs and
+version downgrades are rejected. Every ZIP must match `SHA256SUMS`; GitHub's
+asset digest must agree when present. The embedded release manifest must match
+the selected tag, channel and updater protocol. ZIP traversal, duplicate names,
+Windows device paths and links are rejected.
 
-References:
+## Installing a staged update
 
-- [Brave updater branding at the patch base](https://github.com/brave/brave-core/blob/v1.99.8/chromium_src/chrome/updater/branding.gni)
-- [Chromium updater documentation](https://chromium.googlesource.com/chromium/src/+/main/docs/updater/)
-- [Chromium updater protocol 3.1](https://chromium.googlesource.com/chromium/src/+/main/docs/updater/protocol_3_1.md)
-- [Chromium updater protocol 4](https://chromium.googlesource.com/chromium/src/+/main/docs/updater/protocol_4.md)
+The helper extracts a verified ZIP into a new `versions/` directory. It writes
+`pending.json` only after the browser, updater and release manifest validate.
+The active `current.json` remains untouched while the browser runs. About then
+shows Relaunch.
 
-## Options for native integration
+Chromium's Windows relaunch hook invokes the helper with the parent process and
+restart arguments. The helper waits for the browser to exit, retains
+`previous.json`, atomically selects the pending version, and starts that version
+with the same profile and session-restoration arguments. Starting a shortcut
+after closing the browser also activates a staged update. A running browser
+under this installation prevents activation. The helper never forcibly closes
+the user's browser.
 
-An Omaha adapter can discover completed GitHub releases and return the
-protocol's expected response while the actual installers are hosted as GitHub
-assets. This needs a server endpoint, separate application and updater identity
-(GUIDs, registry paths, service names, profile directories, and branding),
-appropriate package/CUP trust configuration, and signed Windows installers.
-Brave's prebuilt updater cannot be treated as a customized updater merely by
-changing its server URL. End-to-end installation, replacement, downgrade,
-failure recovery, and signature validation would need testing.
+Old versions remain available for manual recovery. There is no automatic health
+rollback or pruning yet. For recovery, close this installation's browser and
+restore `current.json` from `previous.json`; preserve the profile. The installer
+uninstaller removes installed application versions and its update task, while
+retaining the separate profile.
 
-Another option is a new GitHub-aware browser updater/helper. That needs native
-UI integration, process exit handling, locked-file replacement, trust/signature
-verification, and recovery. It is substantially more browser code and testing
-than the portable launcher implemented here.
+## Build and validation
 
-For this resource-constrained pipeline, the portable launcher avoids a server
-and administrator service installation and delivers GitHub update checks now.
-Native updater integration remains separate future work.
+`patches/0005-Add-GitHub-browser-update-hooks.patch` contains the native browser
+hooks, while `updater/` contains the self-contained .NET helper and `installer/`
+contains the Inno Setup installer. `scripts/package_windows.py` builds both
+release assets and pins the compiler download to a verified SHA-256.
+
+The build deliberately uses `is_official_build=false` to select the customized
+Windows basic updater implementation. `enable_updater=false` and
+`enable_update_notifications=false` disable Brave's Omaha browser updater.
+Chromium component updates remain separate. An Omaha URL cannot consume
+GitHub's release JSON directly; this helper implements that translation locally.
+
+Pull-request checks test channel/version selection, checksum failure, archive
+validation, staging/activation, locking and downgrade prevention. A Windows
+fixture test compiles the production installer, installs it, checks the Start
+Menu shortcut, and verifies launcher arguments and profile preservation.
+Full release builds additionally start both the packaged browser and the
+installed browser through the stable launcher, checking their DevTools endpoints.
+CI refuses publication if either startup check fails.
+
+The binaries are currently unsigned. Integrity depends on HTTPS and control of
+the GitHub repository; checksums are not an independent publisher signature.
+Authenticode signing can be added when a signing identity is available.

@@ -7,6 +7,11 @@
   and third-party licenses distributed with the browser.
 - **Loukious** — original Google sign-in/Sync restoration and Windows build
   fixes, preserved as four Git format patches with original commit authorship.
+- **Jordan Russell, Martijn Laan and Inno Setup contributors** — Windows
+  installer compiler, [Inno Setup](https://jrsoftware.org/isinfo.php). The pinned
+  compiler is a build tool, not a release asset.
+- **.NET contributors** — runtime bundled with the small Windows updater,
+  [dotnet/runtime](https://github.com/dotnet/runtime), MIT license.
 - **ungoogled-chromium-windows contributors** and **Maishan-Inc / Veil-Chromium** —
   references for sequential Windows build jobs that preserve intermediate
   output across GitHub's job time limit. This repository uses independently

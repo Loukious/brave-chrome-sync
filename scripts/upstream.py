@@ -54,10 +54,13 @@ def series():
 
 def digest():
     hash_value = hashlib.sha256()
-    paths = [ROOT / "config.json", ROOT / "patches/series", *series()]
+    paths = [ROOT / ".gitattributes", ROOT / "config.json", ROOT / "patches/series", *series()]
     paths += sorted((ROOT / "scripts").glob("*.py"))
     paths += sorted((ROOT / "scripts").glob("*.ps1"))
     paths += sorted((ROOT / ".github/workflows").glob("*.yml"))
+    paths += sorted((ROOT / "updater").glob("*.cs"))
+    paths += sorted((ROOT / "updater").glob("*.csproj"))
+    paths += sorted((ROOT / "installer").glob("*.iss"))
     for path in paths:
         hash_value.update(path.relative_to(ROOT).as_posix().encode() + b"\0")
         hash_value.update(path.read_bytes() + b"\0")

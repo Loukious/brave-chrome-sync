@@ -42,6 +42,14 @@ permissions:
   contents: read
   actions: write
 jobs:
+  already-finished:
+    # Keep the called workflow successful so later jobs and publication run
+    # when an earlier compilation stage finished ahead of the 16-stage limit.
+    if: inputs.finished == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo 'Compilation already finished in an earlier stage.'
   stage:
     if: inputs.finished != 'true'
     runs-on: ${{ inputs.runner }}

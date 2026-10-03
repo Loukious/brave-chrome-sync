@@ -7,7 +7,7 @@ if (pid != null) File.WriteAllText(pid["--fixture-pid=".Length..], Environment.P
 var wait = args.FirstOrDefault(argument => argument.StartsWith("--fixture-wait="));
 if (wait != null)
 {
-    // Allow copying the self-contained test payload on slower hosted runners.
+    // Keep the simulated browser alive until the test explicitly releases it.
     var deadline = DateTime.UtcNow.AddMinutes(5);
     while (!File.Exists(wait["--fixture-wait=".Length..]) && DateTime.UtcNow < deadline)
         Thread.Sleep(100);

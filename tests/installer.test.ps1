@@ -12,7 +12,8 @@ New-Item $profile -ItemType Directory | Out-Null
 Set-Content (Join-Path $profile 'sentinel.txt') 'profile remains'
 $capture = Join-Path $root 'arguments with spaces.json'
 $launcher = Join-Path $root 'SyncBrowser.exe'
-Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$capture`"", "--user-data-dir=`"$profile`"", 'https://example.test/a?x=one&y=two') -WindowStyle Hidden -Wait
+$initialLauncher = Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$capture`"", "--user-data-dir=`"$profile`"", 'https://example.test/a?x=one&y=two') -WindowStyle Hidden -PassThru
+if (-not $initialLauncher.WaitForExit(30000) -or $initialLauncher.ExitCode -ne 0) { throw 'Initial launcher failed.' }
 $deadline = [datetime]::UtcNow.AddSeconds(30)
 while (-not (Test-Path $capture) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
 $arguments = Get-Content $capture -Raw | ConvertFrom-Json
@@ -26,7 +27,9 @@ if ($shortcut.TargetPath -ne $launcher) { throw 'Start Menu shortcut does not us
 $heldCapture = Join-Path $root 'held-browser.json'
 $pidFile = Join-Path $root 'held-browser.pid'
 $releaseParent = Join-Path $root 'release-parent.txt'
-Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$heldCapture`"", "--fixture-pid=`"$pidFile`"", "--fixture-wait=`"$releaseParent`"", "--user-data-dir=`"$profile`"") -WindowStyle Hidden -Wait
+# Start-Process -Wait waits for descendants, including the browser we hold open.
+$heldLauncher = Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$heldCapture`"", "--fixture-pid=`"$pidFile`"", "--fixture-wait=`"$releaseParent`"", "--user-data-dir=`"$profile`"") -WindowStyle Hidden -PassThru
+if (-not $heldLauncher.WaitForExit(30000) -or $heldLauncher.ExitCode -ne 0) { throw 'Held browser launcher failed.' }
 $deadline = [datetime]::UtcNow.AddSeconds(30)
 while (-not (Test-Path $pidFile) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
 $parentPid = [int](Get-Content $pidFile -Raw)

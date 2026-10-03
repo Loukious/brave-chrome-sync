@@ -2,7 +2,7 @@
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sys
 import zipfile
 
@@ -44,14 +44,15 @@ def verify(root):
     with zipfile.ZipFile(archives[0]) as archive:
         if archive.testzip() is not None:
             raise ValueError("Browser archive is corrupt")
-        names = [Path(name).name.lower() for name in archive.namelist()]
-        if sum(name in ("brave.exe", "chrome.exe") for name in names) != 1:
+        names = archive.namelist()
+        browsers = [name for name in names if PurePosixPath(name).name.lower() in ("brave.exe", "chrome.exe")]
+        if len(browsers) != 1:
             raise ValueError("Missing or ambiguous browser executable")
-        if "chrome.dll" not in names:
-            raise ValueError("Browser archive is missing chrome.dll")
-        if "syncupdater.exe" not in names or "sync-release.json" not in names:
-            raise ValueError("Browser archive is missing its native updater")
-        marker = next(name for name in archive.namelist() if Path(name).name == "sync-release.json")
+        app = PurePosixPath(browsers[0]).parent
+        for name in ("chrome.dll", "SyncUpdater.exe", "sync-release.json"):
+            if (app / name).as_posix() not in names:
+                raise ValueError(f"Browser archive is missing {name} beside its executable")
+        marker = (app / "sync-release.json").as_posix()
         if json.loads(archive.read(marker)) != {"release_tag": metadata["release_tag"],
                                                "channel": metadata["channel"], "protocol": 1}:
             raise ValueError("Browser archive update identity differs from provenance")

@@ -21,6 +21,8 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Exercise update staging, integrity and activation offline
         run: dotnet run --project tests/updater/Updater.Tests.csproj -p:PublishSingleFile=false -p:PublishTrimmed=false
+      - name: Check Windows checkpoint integrity and archive round trip
+        run: python -m unittest discover -s tests -p test_checkpoint.py -v
       - name: Build fixture browser and real installer
         shell: pwsh
         run: |

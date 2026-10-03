@@ -101,6 +101,21 @@ await Test("stage, restart activation and rollback pointer", async () => {
     Assert(statuses.Last().Status == "updated", "Current version not reported as up to date");
 });
 
+await Test("missing installed browser explains how to diagnose quarantine", () => {
+    var (updater, _) = Fixture("quarantined", Payload());
+    var browser = updater.PathInRoot(updater.ReadVersion().Browser);
+    File.Delete(browser);
+    try { updater.ReadVersion(); }
+    catch (InvalidDataException error)
+    {
+        Assert(error.Message.Contains(browser) && error.Message.Contains("Windows Security"),
+               "Missing browser was reported as an invalid version without recovery guidance");
+        Assert(File.Exists(updater.PathInRoot("current.json")), "Missing executable removed the installation pointer");
+        return Task.CompletedTask;
+    }
+    throw new Exception("Missing installed browser was accepted");
+});
+
 await Test("bad digest leaves current installation intact", async () => {
     var (updater, github) = Fixture("digest", Payload());
     github.Payload = (byte[])github.Payload.Clone();

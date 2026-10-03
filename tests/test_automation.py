@@ -1,4 +1,6 @@
 import hashlib
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -9,11 +11,30 @@ from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from upstream import select_release, version
+from upstream import select_release, version, main as resolve_main
 from verify_release import verify
 
 
 class ReleaseSelectionTests(unittest.TestCase):
+    def test_nightly_source_can_produce_our_release_distribution(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            config = {"release_channel": "release", "patch_revision": 2,
+                      "runner": "windows", "node_version": "24.x", "pnpm_version": "11.11.0"}
+            (root / "config.json").write_text(json.dumps(config))
+            result = io.StringIO()
+            source = {"tag_name": "v1.99.9", "name": "Nightly v1.99.9", "prerelease": True, "draft": False}
+            with patch("upstream.ROOT", root), patch("upstream.api", return_value=source), \
+                 patch("upstream.digest", return_value="0123456789abcdef"), \
+                 patch("upstream.resolve_commit", return_value="abc"), \
+                 patch.object(sys, "argv", ["upstream.py", "--tag", "v1.99.9", "--repository", ""]), \
+                 patch.dict(os.environ, {"GITHUB_OUTPUT": ""}), contextlib.redirect_stdout(result):
+                resolve_main()
+            output = json.loads(result.getvalue())
+            self.assertEqual(output["upstream_tag"], "v1.99.9")
+            self.assertEqual(output["channel"], "release")
+            self.assertEqual(output["prerelease"], "false")
+
     def test_nightly_is_not_selected_as_stable_despite_upstream_flag(self):
         releases = [
             {"name": "Nightly v1.99.9", "tag_name": "v1.99.9", "prerelease": False},
@@ -41,6 +62,7 @@ class PublishTests(unittest.TestCase):
         metadata = {"release_tag": "v1.99.8-sync.r1.0123456789ab", "upstream_sha": "abc",
                     "patch_digest": "digest", "upstream_tag": "v1.99.8", "chromium_version": "155.0.0.0",
                     "pipeline_commit": "def", "browser_smoke_test": "Chrome/155.0.0.0",
+                    "gn_args": {"is_official_build": True, "is_debug": False, "is_component_build": False},
                     "native_updater": True, "updater_protocol": 1, "channel": "nightly",
                     "installer": "fixture-windows-x64-setup.exe", "installer_smoke_test": "Chrome/155.0.0.0"}
         (root / "build-metadata.json").write_text(json.dumps(metadata))
@@ -76,6 +98,17 @@ class PublishTests(unittest.TestCase):
             self.make_payload(root)
             with patch.dict(os.environ, {"RELEASE_TAG": "wrong"}):
                 with self.assertRaises(ValueError):
+                    verify(root)
+
+    def test_development_or_component_build_never_publishes(self):
+        for field, value in (("is_official_build", False), ("is_debug", True), ("is_component_build", True)):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                self.make_payload(root)
+                metadata = json.loads((root / "build-metadata.json").read_text())
+                metadata["gn_args"][field] = value
+                (root / "build-metadata.json").write_text(json.dumps(metadata))
+                with self.assertRaisesRegex(ValueError, "Release configuration"):
                     verify(root)
 
     def test_versioned_library_without_normalization_never_publishes(self):

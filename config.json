@@ -1,5 +1,6 @@
 {
   "upstream_channel": "nightly",
+  "release_channel": "release",
   "minimum_upstream_version": "1.99.8",
   "patch_base_tag": "v1.99.8",
   "patch_base_commit": "9cc0476e9506f93ff6921b0afed668d048f07313",
@@ -11,7 +12,10 @@
   "compile_jobs": 2,
   "build_stages": 16,
   "gn_args": {
-    "is_official_build": false,
+    "is_official_build": true,
+    "is_debug": false,
+    "require_brave_service_keys": false,
+    "should_generate_symbols": false,
     "is_component_build": false,
     "symbol_level": 0,
     "blink_symbol_level": 0,

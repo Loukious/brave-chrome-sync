@@ -71,6 +71,7 @@ def package(root, dist, tag, sha, release_tag, channel):
     config = json.loads((ROOT / "config.json").read_text())
     package_json = json.loads((target / "package.json").read_text())
     metadata = {"upstream_tag": tag, "upstream_sha": sha,
+                "upstream_source_channel": config["upstream_channel"],
                 "chromium_version": package_json["config"]["projects"]["chrome"]["tag"],
                 "release_tag": release_tag, "channel": channel,
                 "patch_digest": digest(), "gn_args": config["gn_args"],
@@ -192,6 +193,9 @@ def main():
                f"--channel={args.channel}", "--skip_signing", "--use_remoteexec=false",
                "--target=create_dist_zips", f"--ninja=j:{config['compile_jobs']}"]
     command += [f"--gn={key}:{json.dumps(value)}" for key, value in config["gn_args"].items()]
+    # Brave only forwards its --ninja=j value into SISO_LIMITS for remoteexec
+    # builds. Set the local limit explicitly for this offline compilation.
+    os.environ["SISO_LIMITS"] = f"local={config['compile_jobs']}"
     result = timed_run(command, root / "src/brave", config["compile_minutes"] * 60)
     if result == 124:
         output_dir = root / "src/out/Sync"

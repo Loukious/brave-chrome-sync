@@ -3,3 +3,5 @@
 0003-Fix-Wintun-hook-Python-path.patch
 0004-Fix-Wintun-hook-config-import.patch
 0005-Add-GitHub-browser-update-hooks.patch
+0006-Use-GitHub-updater-in-Windows-release-builds.patch
+0007-Allow-independent-release-builds-without-private-Brave.patch

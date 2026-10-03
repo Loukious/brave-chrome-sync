@@ -35,6 +35,9 @@ on:
       pnpm_version:
         type: string
         required: true
+    secrets:
+      BRAVE_SERVICES_KEY:
+        required: true
     outputs:
       finished:
         value: ${{ inputs.finished == 'true' && 'true' || jobs.stage.outputs.finished }}
@@ -94,6 +97,7 @@ jobs:
           UPSTREAM_SHA: ${{ inputs.upstream_sha }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           CHANNEL: ${{ inputs.channel }}
+          BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
         run: |
           python scripts/stage.py --mode $env:BUILD_MODE --tag $env:UPSTREAM_TAG --sha $env:UPSTREAM_SHA --release-tag $env:RELEASE_TAG --channel $env:CHANNEL
           if ($LASTEXITCODE -ne 0) { throw "Build stage failed: $LASTEXITCODE" }

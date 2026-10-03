@@ -46,6 +46,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           UPSTREAM_TAG: ${{ inputs.upstream_tag }}
         run: python scripts/upstream.py --tag "$UPSTREAM_TAG"
+  extension-service:
+    needs: detect
+    if: needs.detect.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Check original Brave-hosted uBlock download
+        env:
+          BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
+          UPSTREAM_TAG: ${{ needs.detect.outputs.upstream_tag }}
+        run: python scripts/extension_services.py --tag "$UPSTREAM_TAG"
   patches:
     needs: detect
     if: needs.detect.outputs.build == 'true'
@@ -64,8 +81,10 @@ jobs:
           UPSTREAM_SHA: ${{ needs.detect.outputs.upstream_sha }}
         run: python scripts/prepare.py --root "$RUNNER_TEMP/patch-check" --tag "$UPSTREAM_TAG" --sha "$UPSTREAM_SHA" --patch-only
   prepare:
-    needs: [detect, patches]
+    needs: [detect, patches, extension-service]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: prepare
       stage: 0
@@ -79,6 +98,8 @@ jobs:
   build-1:
     needs: [detect, prepare]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 1
@@ -94,6 +115,8 @@ jobs:
   build-2:
     needs: [detect, build-1]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 2
@@ -109,6 +132,8 @@ jobs:
   build-3:
     needs: [detect, build-2]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 3
@@ -124,6 +149,8 @@ jobs:
   build-4:
     needs: [detect, build-3]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 4
@@ -139,6 +166,8 @@ jobs:
   build-5:
     needs: [detect, build-4]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 5
@@ -154,6 +183,8 @@ jobs:
   build-6:
     needs: [detect, build-5]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 6
@@ -169,6 +200,8 @@ jobs:
   build-7:
     needs: [detect, build-6]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 7
@@ -184,6 +217,8 @@ jobs:
   build-8:
     needs: [detect, build-7]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 8
@@ -199,6 +234,8 @@ jobs:
   build-9:
     needs: [detect, build-8]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 9
@@ -214,6 +251,8 @@ jobs:
   build-10:
     needs: [detect, build-9]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 10
@@ -229,6 +268,8 @@ jobs:
   build-11:
     needs: [detect, build-10]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 11
@@ -244,6 +285,8 @@ jobs:
   build-12:
     needs: [detect, build-11]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 12
@@ -259,6 +302,8 @@ jobs:
   build-13:
     needs: [detect, build-12]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 13
@@ -274,6 +319,8 @@ jobs:
   build-14:
     needs: [detect, build-13]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 14
@@ -289,6 +336,8 @@ jobs:
   build-15:
     needs: [detect, build-14]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 15
@@ -304,6 +353,8 @@ jobs:
   build-16:
     needs: [detect, build-15]
     uses: ./.github/workflows/windows-stage.yml
+    secrets:
+      BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
     with:
       mode: compile
       stage: 16

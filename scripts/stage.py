@@ -15,6 +15,7 @@ from prepare import run
 from upstream import ROOT, digest
 from package_windows import package_browser
 from checkpoint import create_archive, verify_wasm_vendor
+from extension_services import check_build_key, check_service
 
 
 def timed_run(command, cwd, seconds):
@@ -57,6 +58,8 @@ def restore(root, checkpoint):
 
 
 def package(root, dist, tag, sha, release_tag, channel):
+    check_build_key(root / "src/out/Sync")
+    extension_service = check_service(tag)
     dist.mkdir(parents=True, exist_ok=True)
     candidates = list((root / "src/out/Sync/dist").glob("*.zip"))
     if len(candidates) != 1:
@@ -79,6 +82,7 @@ def package(root, dist, tag, sha, release_tag, channel):
                 "workflow_run": os.environ.get("GITHUB_RUN_ID", "local"),
                 "google_credentials": "runtime only", "native_updater": True,
                 "updater_protocol": 1, "installer": installer.name,
+                "extension_service_manifest_test": extension_service,
                 "installer_smoke_test": installer_smoke, "browser_smoke_test": smoke}
     (dist / "build-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(ROOT / "scripts/Update-BraveChromeSync.ps1", dist)

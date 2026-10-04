@@ -77,7 +77,11 @@ internal static class Program
                 Updater.AtomicWrite(updater.PathInRoot("pending.json"), version, Models.Default.InstalledVersion);
         }
         await updater.ActivateAsync();
-        if (OperatingSystem.IsWindows()) TaskbarPins.Repair(updater);
+        if (OperatingSystem.IsWindows())
+        {
+            BrowserRegistration.Register(updater);
+            TaskbarPins.Repair(updater);
+        }
         await ConfigureTask(updater.Root, false);
     }
 
@@ -93,8 +97,19 @@ internal static class Program
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             var updater = new Updater(root, http);
             if (arguments.Contains("--initialize")) { await Initialize(updater, arguments); return 0; }
-            if (arguments.Contains("--uninstall")) { await ConfigureTask(root, true); return 0; }
+            if (arguments.Contains("--uninstall"))
+            {
+                if (OperatingSystem.IsWindows()) BrowserRegistration.Unregister(updater);
+                await ConfigureTask(root, true);
+                return 0;
+            }
             updater.ReadInstallation();
+            if (arguments.Contains("--register-browser"))
+            {
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+                BrowserRegistration.Register(updater);
+                return 0;
+            }
             if (arguments.Contains("--repair-taskbar"))
             {
                 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();

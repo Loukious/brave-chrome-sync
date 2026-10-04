@@ -7,6 +7,7 @@ $process = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPR
 if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
 $current = Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json
 if ($current.tag -ne $tag) { throw 'Installer did not select its release.' }
+& (Join-Path $PSScriptRoot 'browser-registration.test.ps1') -InstallRoot $root -Channel 'nightly'
 $profile = Join-Path $root 'Test User Data'
 New-Item $profile -ItemType Directory | Out-Null
 Set-Content (Join-Path $profile 'sentinel.txt') 'profile remains'
@@ -65,5 +66,6 @@ while (-not (Test-Path $restartCapture) -and [datetime]::UtcNow -lt $deadline) {
 $restartArguments = Get-Content $restartCapture -Raw | ConvertFrom-Json
 if ((Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json).tag -ne $newTag -or $restartArguments -notcontains '--restore-last-session') { throw 'Relaunch did not activate the staged version and restore session arguments.' }
 if ((Get-Content (Join-Path $root 'previous.json') -Raw | ConvertFrom-Json).tag -ne $tag -or (Get-Content (Join-Path $profile 'sentinel.txt') -Raw).Trim() -ne 'profile remains') { throw 'Relaunch lost the previous version or profile.' }
+& (Join-Path $PSScriptRoot 'browser-registration.test.ps1') -InstallRoot $root -Channel 'nightly'
 Write-Host 'Installer, shortcuts, argument preservation, parent-exit wait, staged relaunch and profile preservation passed.'
 & (Join-Path $PSScriptRoot 'taskbar-pins.test.ps1') -Helper $helper

@@ -20,6 +20,8 @@ def verify(root):
         raise ValueError("Direct launch and shortcut profile sharing was not smoke tested")
     if metadata.get("taskbar_launch_smoke_test") is not True:
         raise ValueError("Native taskbar launch command was not smoke tested")
+    if metadata.get("default_browser_registration_test") is not True:
+        raise ValueError("Windows default browser registration was not validated")
     if metadata.get("native_updater") is not True or metadata.get("updater_protocol") != 1 or not metadata.get("installer_smoke_test"):
         raise ValueError("Native updater and installed browser were not validated")
     installer = metadata.get("installer", "")

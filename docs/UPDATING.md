@@ -18,6 +18,12 @@ shortcuts, with a taskbar launch command pointing to `SyncBrowser.exe` and the
 current profile. Pinning a window therefore follows future updates. Installation
 and update activation repair existing pins for this installation, preserving
 their arguments and leaving other applications' pins unchanged.
+The installer also registers this browser in Windows Default Apps for HTTP,
+HTTPS, HTML documents and supported browser files. Choose Brave Chrome Sync in
+**Settings > Apps > Default apps** to make it your default. Those associations
+open the stable launcher and retain the same profile after updates. Registration
+does not change an existing default choice; uninstall removes this
+installation's registration.
 
 Nightly, Beta and Release have separate installation identities. Installing
 Release over an earlier Nightly build therefore leaves two Installed Apps

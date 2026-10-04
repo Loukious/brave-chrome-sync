@@ -86,6 +86,7 @@ def package(root, dist, tag, sha, release_tag, channel):
                 "devtools_target_smoke_test": True,
                 "shared_default_profile_smoke_test": True,
                 "taskbar_launch_smoke_test": True,
+                "default_browser_registration_test": True,
                 "installer_smoke_test": installer_smoke, "browser_smoke_test": smoke}
     (dist / "build-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(ROOT / "scripts/Update-BraveChromeSync.ps1", dist)
@@ -120,6 +121,8 @@ def installer_smoke_test(root, installer, release_tag, channel):
     pointer = json.loads((install / "current.json").read_text())
     if identity != {"repository": "Loukious/brave-chrome-sync", "channel": channel, "protocol": 1} or pointer["tag"] != release_tag:
         raise ValueError("Installer did not initialize the correct browser identity")
+    run("pwsh", "-NoProfile", "-File", ROOT / "tests/browser-registration.test.ps1",
+        "-InstallRoot", install, "-Channel", channel)
     # Launch through the same stable executable used by shortcuts, with an isolated profile.
     result = launch_smoke_test(install / "SyncBrowser.exe", root / "installer-smoke-profile",
                               launcher=True)

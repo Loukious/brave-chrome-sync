@@ -3,7 +3,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, PureWindowsPath
 import re
 import subprocess
 
@@ -33,7 +33,8 @@ def inputs(read):
     return identity.hexdigest(), names
 
 
-def original_digest(commit, names):
+def original_digest(commit, names, windows_order=False):
+    """Reconstruct a pipeline hash, including the historical Windows ordering."""
     paths = [".gitattributes", "config.json", "patches/series",
              *[f"patches/{name}" for name in names]]
     tracked = subprocess.run(["git", "ls-tree", "-r", "--name-only", commit], cwd=ROOT,
@@ -41,8 +42,9 @@ def original_digest(commit, names):
     for folder, extension in [("scripts", ".py"), ("scripts", ".mjs"), ("scripts", ".ps1"),
                               (".github/workflows", ".yml"), ("updater", ".cs"),
                               ("updater", ".csproj"), ("installer", ".iss")]:
-        paths += sorted(path for path in tracked if str(PurePosixPath(path).parent) == folder
-                        and path.endswith(extension))
+        paths += sorted((path for path in tracked if str(PurePosixPath(path).parent) == folder
+                         and path.endswith(extension)),
+                        key=PureWindowsPath if windows_order else PurePosixPath)
     identity = hashlib.sha256()
     for path in paths:
         identity.update(path.encode() + b"\0" + git_file(commit, path) + b"\0")
@@ -56,7 +58,7 @@ def check_compatibility(commit):
     current, _ = inputs(lambda path: (ROOT / path).read_bytes())
     if old != current:
         raise ValueError("Checkpoint browser patches, toolchain or build settings have changed")
-    return original_digest(commit, names)
+    return {original_digest(commit, names), original_digest(commit, names, windows_order=True)}
 
 
 def check_run(run_id, repository):
@@ -76,9 +78,11 @@ def check_run(run_id, repository):
 
 
 def check_marker(marker, tag, sha, current_digest, resume_commit=""):
-    expected_digest = check_compatibility(resume_commit) if resume_commit else current_digest
-    if marker != {"upstream_tag": tag, "upstream_sha": sha, "patch_digest": expected_digest}:
-        raise ValueError("Checkpoint does not match this upstream version and patch set")
+    expected_digests = check_compatibility(resume_commit) if resume_commit else {current_digest}
+    if not any(marker == {"upstream_tag": tag, "upstream_sha": sha, "patch_digest": identity}
+               for identity in expected_digests):
+        raise ValueError(f"Checkpoint does not match this upstream version and patch set: "
+                         f"expected tag={tag}, sha={sha}, digests={sorted(expected_digests)}; actual={marker}")
     return {**marker, "patch_digest": current_digest}
 
 

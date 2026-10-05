@@ -69,16 +69,27 @@ installer; it avoids Chromium's full installer and symbol archive targets.
 Compilation output is retained between stages at the same `D:\b` path, including
 source timestamps and pnpm symlinks, so later jobs can continue the build.
 Checkpoint creation streams through a binary pipe to avoid Windows tar's
-incorrect archive-self file matches. Tar warnings fail the checkpoint, and
-vendored Cargo file checksums are validated before archiving and after restore.
+incorrect archive-self file matches. Tar warnings, incomplete tar members, missing
+end markers, and gzip checksum errors fail the checkpoint before upload. A size
+and SHA256 manifest is checked before extraction. Vendored Cargo file checksums
+are validated before archiving and after restore.
 
 Standard hosted runner compute is
 [free for public repositories](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 [Each hosted job is limited to six hours](https://docs.github.com/en/actions/reference/limits).
 Checkpoint transfer and source initialization consume part of that budget.
-Consumed checkpoints are deleted only after the next artifact is uploaded;
-the current checkpoint remains available if the next stage fails. All artifacts
+The newest two checkpoints are retained after each successful handoff, so the
+previous stage remains available if the latest checkpoint fails. All artifacts
 expire after five days, and successful publication removes the final artifact.
+
+To recover an interrupted run, dispatch the build workflow with its explicit
+`upstream_tag`, the earlier `resume_run_id`, and its `resume_stage` checkpoint
+number. Recovery checks the original pipeline identity and requires identical
+browser patches, source preparation, GN settings, channel, and toolchain.
+Updater or checkpoint-handling changes can reuse the existing browser objects.
+Legacy checkpoints without an integrity manifest require this explicit recovery
+path and a complete tar/gzip validation before extraction. The earlier run's
+checkpoint is retained during recovery.
 
 **This does not guarantee that Brave fits on a free runner.** Brave has a larger
 dependency tree than ungoogled Chromium. GitHub documents 16 GB RAM and 14 GB

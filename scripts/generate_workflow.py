@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CHECKOUT = "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6"
 PYTHON = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6"
-DOWNLOAD = "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4"
+DOWNLOAD = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8"
 
 
 def generate():
@@ -25,6 +25,14 @@ on:
         description: 'Optional published Brave tag, e.g. v1.99.8 (blank tracks configured channel)'
         type: string
         default: ''
+      resume_run_id:
+        description: 'Optional earlier build run containing a compatible checkpoint; requires upstream_tag'
+        type: string
+        default: ''
+      resume_stage:
+        description: 'Checkpoint number in resume_run_id'
+        type: number
+        default: 0
   push:
     branches: [main]
     paths: ['.gitattributes', 'config.json', 'patches/**', 'scripts/**', 'updater/**', 'installer/**', '.github/workflows/**']
@@ -56,6 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{{{ github.token }}}}
           UPSTREAM_TAG: ${{{{ inputs.upstream_tag }}}}
+          RESUME_RUN_ID: ${{{{ inputs.resume_run_id }}}}
         run: python scripts/upstream.py --tag "$UPSTREAM_TAG"
   extension-service:
     needs: detect
@@ -97,8 +106,10 @@ jobs:
     secrets:
       BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
     with:
-      mode: prepare
+      mode: ${{{{ inputs.resume_run_id != '' && 'compile' || 'prepare' }}}}
       stage: 0
+      previous_stage: ${{{{ inputs.resume_stage || 0 }}}}
+      checkpoint_run_id: ${{{{ inputs.resume_run_id }}}}
       upstream_tag: ${{{{ needs.detect.outputs.upstream_tag }}}}
       upstream_sha: ${{{{ needs.detect.outputs.upstream_sha }}}}
       release_tag: ${{{{ needs.detect.outputs.release_tag }}}}

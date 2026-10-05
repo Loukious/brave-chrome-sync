@@ -1,4 +1,5 @@
 import hashlib
+import gzip
 import io
 import json
 import os
@@ -11,10 +12,72 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from checkpoint import create_archive, verify_wasm_vendor
+from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, validate_archive
 
 
 class CheckpointTests(unittest.TestCase):
+    def archive(self, folder):
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as stream:
+            entry = tarfile.TarInfo("fixture.bin")
+            entry.size = 4096
+            stream.addfile(entry, io.BytesIO(b"x" * entry.size))
+        archive = Path(folder) / "state.tar.gz"
+        archive.write_bytes(gzip.compress(buffer.getvalue()))
+        return archive, buffer.getvalue()
+
+    def test_complete_gzip_with_truncated_tar_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive, data = self.archive(temporary)
+            archive.write_bytes(gzip.compress(data[:1024]))
+            with self.assertRaisesRegex(ValueError, "Invalid checkpoint"):
+                validate_archive(archive)
+
+    def test_truncated_gzip_and_missing_tar_eof_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive, data = self.archive(temporary)
+            archive.write_bytes(archive.read_bytes()[:-6])
+            with self.assertRaisesRegex(ValueError, "Invalid checkpoint"):
+                validate_archive(archive)
+            archive.write_bytes(gzip.compress(data[:4608]))
+            with self.assertRaisesRegex(ValueError, "Missing tar end"):
+                validate_archive(archive)
+
+    def test_manifest_checks_size_digest_and_members(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive, _ = self.archive(temporary)
+            manifest = {"format": 1, "bytes": archive.stat().st_size,
+                        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "members": 1}
+            path = archive.with_name("state-manifest.json")
+            path.write_text(json.dumps(manifest))
+            self.assertEqual(verify_checkpoint(archive), 1)
+            for key, value, error in [("bytes", 1, "size/format"),
+                                      ("sha256", "bad", "SHA256"), ("members", 2, "member count")]:
+                path.write_text(json.dumps({**manifest, key: value}))
+                with self.assertRaisesRegex(ValueError, error):
+                    verify_checkpoint(archive)
+
+    def test_legacy_archive_requires_explicit_recovery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive, _ = self.archive(temporary)
+            with self.assertRaisesRegex(ValueError, "manifest is missing"):
+                verify_checkpoint(archive)
+            self.assertEqual(verify_checkpoint(archive, allow_legacy=True), 1)
+
+    def test_invalid_checkpoint_is_rejected_before_creating_build_tree(self):
+        from stage import restore
+        with tempfile.TemporaryDirectory() as temporary:
+            checkpoint = Path(temporary) / "checkpoint"
+            checkpoint.mkdir()
+            archive, data = self.archive(checkpoint)
+            archive.write_bytes(gzip.compress(data[:1024]))
+            root = Path(temporary) / "build"
+            with patch("stage.run") as extract:
+                with self.assertRaisesRegex(ValueError, "Invalid checkpoint"):
+                    restore(root, checkpoint, allow_legacy=True)
+                extract.assert_not_called()
+                self.assertFalse(root.exists())
+
     def fixture(self, root):
         crate = root / "third_party/wasm/vendor/serde_core"
         crate.mkdir(parents=True)
@@ -83,6 +146,7 @@ class CheckpointTests(unittest.TestCase):
             timestamp = 1700000000
             os.utime(crate / "LICENSE-MIT", (timestamp, timestamp))
             create_archive(source, base / "checkpoint/state.tar.gz")
+            self.assertEqual(verify_checkpoint(base / "checkpoint/state.tar.gz"), 12)
             with tarfile.open(base / "checkpoint/state.tar.gz", "r:gz") as stream:
                 self.assertIn("./third_party/wasm/vendor/serde_core/LICENSE-MIT", stream.getnames())
             restored = base / "restored"

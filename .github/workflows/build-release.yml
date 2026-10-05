@@ -97,7 +97,7 @@ jobs:
     with:
       mode: ${{ inputs.resume_run_id != '' && 'compile' || 'prepare' }}
       stage: 0
-      previous_stage: ${{ inputs.resume_stage || 0 }}
+      previous_stage: ${{ fromJSON(format('0', inputs.resume_stage || 0)) }}
       checkpoint_run_id: ${{ inputs.resume_run_id }}
       upstream_tag: ${{ needs.detect.outputs.upstream_tag }}
       upstream_sha: ${{ needs.detect.outputs.upstream_sha }}

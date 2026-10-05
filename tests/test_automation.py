@@ -3,7 +3,8 @@ import contextlib
 import io
 import json
 import os
-from pathlib import Path
+import fnmatch
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import sys
 import tempfile
 import unittest
@@ -11,8 +12,42 @@ from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from upstream import select_release, version, main as resolve_main
+from upstream import select_release, version, main as resolve_main, digest
 from verify_release import verify
+
+
+class DigestTests(unittest.TestCase):
+    def test_linux_selection_and_windows_build_use_identical_hashes(self):
+        data = {".gitattributes": b"* text eol=lf\n", "config.json": b"{}",
+                "patches/series": b"z.patch\na.patch\n", "patches/z.patch": b"z",
+                "patches/a.patch": b"a", "scripts/runner-setup.ps1": b"runner",
+                "scripts/Start.ps1": b"start", "scripts/Update.ps1": b"update",
+                "scripts/prepare.py": b"prepare", "updater/Program.cs": b"program",
+                "updater/SyncBrowser.csproj": b"project", "installer/browser.iss": b"installer"}
+        order = [".gitattributes", "config.json", "patches/series", "patches/z.patch",
+                 "patches/a.patch", "scripts/prepare.py", "scripts/Start.ps1",
+                 "scripts/Update.ps1", "scripts/runner-setup.ps1", "updater/Program.cs",
+                 "updater/SyncBrowser.csproj", "installer/browser.iss"]
+        identity = hashlib.sha256()
+        for name in order:
+            identity.update(name.encode() + b"\0" + data[name] + b"\0")
+        for flavor, location in [(PurePosixPath, "/fixture"), (PureWindowsPath, "C:/fixture")]:
+            class FixturePath(flavor):
+                def read_bytes(self):
+                    return data[self.relative_to(root).as_posix()]
+
+                def read_text(self):
+                    return self.read_bytes().decode()
+
+                def glob(self, pattern):
+                    folder = self.relative_to(root).as_posix()
+                    return (root / name for name in data
+                            if PurePosixPath(name).parent.as_posix() == folder
+                            and fnmatch.fnmatchcase(PurePosixPath(name).name, pattern))
+
+            root = FixturePath(location)
+            with self.subTest(platform=flavor.__name__), patch("upstream.ROOT", root):
+                self.assertEqual(digest(), identity.hexdigest())
 
 
 class ReleaseSelectionTests(unittest.TestCase):

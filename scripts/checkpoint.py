@@ -25,10 +25,15 @@ def validate_archive(archive):
         with gzip.open(archive, "rb") as compressed:
             reader = Reader(compressed)
             with tarfile.open(fileobj=reader, mode="r|") as stream:
-                count = sum(1 for _ in stream)
+                count = 0
+                data_end = 0
+                for member in stream:
+                    count += 1
+                    data_end = max(data_end, member.offset_data + ((member.size + 511) // 512) * 512)
             while reader.read(1024 * 1024):
                 pass
-            if not count or reader.size % 512 or reader.tail != b"\0" * 1024:
+            if (not count or reader.size < data_end + 1024 or reader.size % 512 or
+                    reader.tail != b"\0" * 1024):
                 raise ValueError("Missing tar end markers")
     except (EOFError, OSError, tarfile.TarError, ValueError) as error:
         raise ValueError(f"Invalid checkpoint archive: {error}") from error

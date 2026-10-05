@@ -42,6 +42,10 @@ class CheckpointTests(unittest.TestCase):
             archive.write_bytes(gzip.compress(data[:4608]))
             with self.assertRaisesRegex(ValueError, "Missing tar end"):
                 validate_archive(archive)
+            # Zero-filled payload cannot masquerade as the two EOF blocks.
+            archive.write_bytes(gzip.compress(data[:512] + b"\0" * 4096))
+            with self.assertRaisesRegex(ValueError, "Missing tar end"):
+                validate_archive(archive)
 
     def test_manifest_checks_size_digest_and_members(self):
         with tempfile.TemporaryDirectory() as temporary:

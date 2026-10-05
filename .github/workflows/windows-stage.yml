@@ -11,6 +11,9 @@ on:
       previous_stage:
         type: number
         default: 0
+      checkpoint_run_id:
+        type: string
+        default: ''
       finished:
         type: string
         default: 'false'
@@ -82,12 +85,25 @@ jobs:
       - name: Set up Windows toolchain
         shell: pwsh
         run: ./scripts/runner-setup.ps1
+      - name: Check recovery checkpoint compatibility
+        id: recovery
+        if: inputs.checkpoint_run_id != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id }}
+        run: |
+          python scripts/resume_checkpoint.py --run-id $env:CHECKPOINT_RUN_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Checkpoint recovery is incompatible' }
       - name: Download previous checkpoint
         if: inputs.mode == 'compile'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: checkpoint-${{ inputs.previous_stage }}
           path: checkpoint
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.checkpoint_run_id || github.run_id }}
+          digest-mismatch: error
       - name: Prepare or continue compilation
         id: build
         shell: pwsh
@@ -98,22 +114,25 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           CHANNEL: ${{ inputs.channel }}
           BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
+          RESUME_COMMIT: ${{ steps.recovery.outputs.commit }}
         run: |
-          python scripts/stage.py --mode $env:BUILD_MODE --tag $env:UPSTREAM_TAG --sha $env:UPSTREAM_SHA --release-tag $env:RELEASE_TAG --channel $env:CHANNEL
+          python scripts/stage.py --mode $env:BUILD_MODE --tag $env:UPSTREAM_TAG --sha $env:UPSTREAM_SHA --release-tag $env:RELEASE_TAG --channel $env:CHANNEL --resume-commit "$env:RESUME_COMMIT"
           if ($LASTEXITCODE -ne 0) { throw "Build stage failed: $LASTEXITCODE" }
       - name: Upload next checkpoint
         if: steps.build.outputs.finished == 'false'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: checkpoint-${{ inputs.stage }}
-          path: checkpoint/state.tar.gz
+          path: |
+            checkpoint/state.tar.gz
+            checkpoint/state-manifest.json
           compression-level: 0
           retention-days: 5
           overwrite: true
           if-no-files-found: error
       - name: Upload completed browser
         if: steps.build.outputs.finished == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: browser-release
           path: dist/*
@@ -121,10 +140,13 @@ jobs:
           retention-days: 5
           overwrite: true
           if-no-files-found: error
-      - name: Remove consumed checkpoint after successful handoff
-        if: inputs.mode == 'compile'
+      - name: Retain the newest two checkpoints after successful handoff
+        if: inputs.mode == 'compile' && inputs.checkpoint_run_id == '' && inputs.previous_stage >= 1
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIOUS_STAGE: ${{ inputs.previous_stage }}
-        run: python scripts/cleanup_artifacts.py --name "checkpoint-$env:PREVIOUS_STAGE"
+        run: |
+          $olderStage = [int]$env:PREVIOUS_STAGE - 1
+          python scripts/cleanup_artifacts.py --name "checkpoint-$olderStage"
+          if ($LASTEXITCODE -ne 0) { throw 'Old checkpoint cleanup failed' }

@@ -84,6 +84,8 @@ def main():
     parser.add_argument("--tag", default="")
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
     args = parser.parse_args()
+    if os.environ.get("RESUME_RUN_ID") and not args.tag:
+        raise ValueError("Checkpoint recovery requires an explicit upstream_tag")
     config = json.loads((ROOT / "config.json").read_text())
     if args.tag:
         version(args.tag)

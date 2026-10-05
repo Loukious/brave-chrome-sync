@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from prepare import run
 from upstream import ROOT, digest
 from package_windows import package_browser
-from checkpoint import create_archive, verify_wasm_vendor
+from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint
+from resume_checkpoint import check_marker
 from extension_services import check_build_key, check_service
 
 
@@ -46,15 +47,17 @@ def snapshot(root, checkpoint):
     create_archive(root, checkpoint / "state.tar.gz")
 
 
-def restore(root, checkpoint):
+def restore(root, checkpoint, allow_legacy=False):
     if root.exists():
         raise ValueError(f"Refusing to restore over existing build tree: {root}")
+    verify_checkpoint(checkpoint / "state.tar.gz", allow_legacy=allow_legacy)
     root.mkdir(parents=True)
     run("tar.exe", "-xzf", checkpoint / "state.tar.gz", "-C", root)
     verify_wasm_vendor(root / "src/brave")
     # The downloaded checkpoint is disposable input inside this repository's
     # CI workspace; it is not a compiler cache or build output directory.
     (checkpoint / "state.tar.gz").unlink()
+    (checkpoint / "state-manifest.json").unlink(missing_ok=True)
 
 
 def package(root, dist, tag, sha, release_tag, channel):
@@ -181,6 +184,7 @@ def main():
     parser.add_argument("--sha", required=True)
     parser.add_argument("--release-tag", required=True)
     parser.add_argument("--channel", choices=["release", "beta", "nightly"], required=True)
+    parser.add_argument("--resume-commit", default="")
     args = parser.parse_args()
     config = json.loads((ROOT / "config.json").read_text())
     root = args.root.resolve()
@@ -200,10 +204,10 @@ def main():
         snapshot(root, args.checkpoint)
         output("finished", "false")
         return
-    restore(root, args.checkpoint)
+    restore(root, args.checkpoint, allow_legacy=bool(args.resume_commit))
     marker = json.loads((root / "prepared.json").read_text())
-    if marker != {"upstream_tag": args.tag, "upstream_sha": args.sha, "patch_digest": digest()}:
-        raise ValueError("Checkpoint does not match this upstream version and patch set")
+    marker = check_marker(marker, args.tag, args.sha, digest(), args.resume_commit)
+    (root / "prepared.json").write_text(json.dumps(marker), encoding="utf-8")
     pnpm = shutil.which("pnpm.cmd") or shutil.which("pnpm")
     if not pnpm:
         raise ValueError("pnpm is missing")

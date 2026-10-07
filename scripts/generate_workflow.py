@@ -184,9 +184,10 @@ jobs:
           gh release upload "$RELEASE_TAG" dist/*.exe dist/*.zip dist/*.tar.gz dist/*.ps1 dist/*.json dist/LICENSE dist/SHA256SUMS --clobber
           gh release edit "$RELEASE_TAG" --draft=false "${{flags[@]}}"
       - name: Remove published build artifact
+        continue-on-error: true
         env:
           GH_TOKEN: ${{{{ github.token }}}}
-        run: python scripts/cleanup_artifacts.py --name browser-release
+        run: python scripts/cleanup_artifacts.py --name browser-release --best-effort
 """
     return header
 

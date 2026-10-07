@@ -142,11 +142,12 @@ jobs:
           if-no-files-found: error
       - name: Retain the newest two checkpoints after successful handoff
         if: inputs.mode == 'compile' && inputs.checkpoint_run_id == '' && inputs.previous_stage >= 1
+        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIOUS_STAGE: ${{ inputs.previous_stage }}
         run: |
           $olderStage = [int]$env:PREVIOUS_STAGE - 1
-          python scripts/cleanup_artifacts.py --name "checkpoint-$olderStage"
+          python scripts/cleanup_artifacts.py --name "checkpoint-$olderStage" --best-effort
           if ($LASTEXITCODE -ne 0) { throw 'Old checkpoint cleanup failed' }

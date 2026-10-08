@@ -66,6 +66,12 @@ The design follows the sequential checkpoint approach in
 It uses two compile workers, one linker, no debug symbols, no PGO/LTO, and the
 portable ZIP compilation target, then packages a small independent Inno Setup
 installer; it avoids Chromium's full installer and symbol archive targets.
+At the stage deadline, the build receives CTRL_BREAK in an isolated hidden
+console and gets up to two minutes to stop. A Windows job tracks the entire
+build process tree, including children whose parents already exited. The stage
+archives only after all children stop; a stuck process causes a failure instead
+of a checkpoint containing files that are still being written.
+
 Compilation output is retained between stages at the same `D:\b` path, including
 source timestamps and pnpm symlinks, so later jobs can continue the build.
 Checkpoint creation streams through a binary pipe to avoid Windows tar's

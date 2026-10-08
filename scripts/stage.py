@@ -17,19 +17,12 @@ from package_windows import package_browser
 from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint
 from resume_checkpoint import check_marker
 from extension_services import check_build_key, check_service
+from windows_build_process import run_build
 
 
 def timed_run(command, cwd, seconds):
     print("+", " ".join(map(str, command)), flush=True)
-    process = subprocess.Popen(list(map(str, command)), cwd=cwd)
-    try:
-        return process.wait(timeout=seconds)
-    except subprocess.TimeoutExpired:
-        # Kill descendants before archiving, so object files are no longer being written.
-        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], check=True)
-        process.wait(timeout=60)
-        time.sleep(5)
-        return 124
+    return run_build(command, cwd, seconds)
 
 
 def output(key, value):

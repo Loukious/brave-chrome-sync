@@ -118,6 +118,18 @@ jobs:
         run: |
           python scripts/stage.py --mode $env:BUILD_MODE --tag $env:UPSTREAM_TAG --sha $env:UPSTREAM_SHA --release-tag $env:RELEASE_TAG --channel $env:CHANNEL --resume-commit "$env:RESUME_COMMIT"
           if ($LASTEXITCODE -ne 0) { throw "Build stage failed: $LASTEXITCODE" }
+      - name: Upload incremental build diagnostics
+        if: always() && inputs.mode == 'compile'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-diagnostics-${{ inputs.stage }}
+          path: |
+            D:/b/src/out/Sync/siso_explain*
+            D:/b/src/out/Sync/siso_metrics*.json
+            D:/b/src/out/Sync/siso_metadata*.json
+          retention-days: 5
+          if-no-files-found: ignore
       - name: Upload next checkpoint
         if: steps.build.outputs.finished == 'false'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

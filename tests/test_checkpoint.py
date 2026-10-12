@@ -147,8 +147,8 @@ class CheckpointTests(unittest.TestCase):
             (source / "binary.dat").write_bytes(binary)
             (source / ".hidden").write_bytes(b"hidden\n")
             os.link(crate / "LICENSE-MIT", source / "LICENSE-copy")
-            timestamp = 1700000000
-            os.utime(crate / "LICENSE-MIT", (timestamp, timestamp))
+            timestamp = 1700000000123456700
+            os.utime(crate / "LICENSE-MIT", ns=(timestamp, timestamp))
             create_archive(source, base / "checkpoint/state.tar.gz")
             self.assertEqual(verify_checkpoint(base / "checkpoint/state.tar.gz"), 12)
             with tarfile.open(base / "checkpoint/state.tar.gz", "r:gz") as stream:
@@ -160,7 +160,7 @@ class CheckpointTests(unittest.TestCase):
             self.assertEqual((restored / "binary.dat").read_bytes(), binary)
             self.assertEqual((restored / ".hidden").read_bytes(), b"hidden\n")
             self.assertEqual((restored / "LICENSE-copy").read_bytes(), b"license\n")
-            self.assertEqual(int((restored / "third_party/wasm/vendor/serde_core/LICENSE-MIT").stat().st_mtime), timestamp)
+            self.assertEqual((restored / "third_party/wasm/vendor/serde_core/LICENSE-MIT").stat().st_mtime_ns, timestamp)
 
 
 if __name__ == "__main__":

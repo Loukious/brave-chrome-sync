@@ -90,7 +90,8 @@ def create_archive(root, archive):
     if archive.is_relative_to(root):
         raise ValueError("Checkpoint output must be outside the archived tree")
     archive.parent.mkdir(parents=True, exist_ok=True)
-    command = ["tar.exe", "-czf", "-", "--options", "gzip:compression-level=1", "-C", str(root), "."]
+    # Windows tar defaults to restricted pax, which drops fractional mtimes.
+    command = ["tar.exe", "-czf", "-", "--format=pax", "--options", "gzip:compression-level=1", "-C", str(root), "."]
     print("+", " ".join(command), flush=True)
     diagnostics = archive.with_name("snapshot-stderr.log")
     # A pipe avoids Windows tar's false archive-self match against a source

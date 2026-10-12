@@ -74,6 +74,9 @@ of a checkpoint containing files that are still being written.
 
 Compilation output is retained between stages at the same `D:\b` path, including
 source timestamps and pnpm symlinks, so later jobs can continue the build.
+Checkpoints use PAX format to preserve subsecond timestamps; Windows tar's
+default format rounds them to whole seconds. Each compilation stage also uploads
+Siso's rebuild explanations and metrics as a small diagnostic artifact.
 Checkpoint creation streams through a binary pipe to avoid Windows tar's
 incorrect archive-self file matches. Tar warnings, incomplete tar members, missing
 end markers, and gzip checksum errors fail the checkpoint before upload. A size

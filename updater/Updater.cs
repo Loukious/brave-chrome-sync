@@ -22,6 +22,7 @@ public record ReleaseManifest(string ReleaseTag, string Channel, int Protocol = 
 [JsonSerializable(typeof(InstalledVersion))]
 [JsonSerializable(typeof(UpdateStatus))]
 [JsonSerializable(typeof(ReleaseManifest))]
+[JsonSerializable(typeof(GoogleClientConfiguration))]
 public partial class Models : JsonSerializerContext { }
 
 public sealed class Updater(string root, HttpClient http)
@@ -280,6 +281,7 @@ public sealed class Updater(string root, HttpClient http)
     public Process StartBrowser(IEnumerable<string> arguments)
     {
         var start = new ProcessStartInfo(PathInRoot(ReadVersion().Browser)) { UseShellExecute = false };
+        GoogleClientConfiguration.Apply(start);
         foreach (var argument in arguments.Where(a => !a.StartsWith("--wait-for-parent-handle", StringComparison.Ordinal)))
             start.ArgumentList.Add(argument);
         if (!start.ArgumentList.Any(a => a.StartsWith("--user-data-dir", StringComparison.Ordinal)))

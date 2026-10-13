@@ -5,10 +5,23 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from package_windows import normalize_payload
+from package_windows import normalize_payload, google_configuration
 
 
 class PackagingTests(unittest.TestCase):
+    def test_missing_runtime_google_configuration_prevents_packaging(self):
+        for values in ({}, {"SYNC_GOOGLE_API_KEY": "configured"},
+                       {"SYNC_GOOGLE_API_KEY": "configured", "SYNC_GOOGLE_CLIENT_ID": "configured",
+                        "SYNC_GOOGLE_CLIENT_SECRET": "dummytoken"}):
+            with self.assertRaisesRegex(ValueError, "Google"):
+                google_configuration(values)
+
+    def test_runtime_configuration_does_not_use_compiler_environment_variables(self):
+        values = {"SYNC_GOOGLE_API_KEY": "api", "SYNC_GOOGLE_CLIENT_ID": "client", "SYNC_GOOGLE_CLIENT_SECRET": "secret"}
+        self.assertEqual(google_configuration(values), {"api_key": "api", "client_id": "client", "client_secret": "secret"})
+        with self.assertRaises(ValueError):
+            google_configuration({"GOOGLE_API_KEY": "api", "GOOGLE_DEFAULT_CLIENT_ID": "client", "GOOGLE_DEFAULT_CLIENT_SECRET": "secret"})
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

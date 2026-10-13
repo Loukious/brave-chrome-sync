@@ -41,6 +41,12 @@ on:
     secrets:
       BRAVE_SERVICES_KEY:
         required: true
+      GOOGLE_API_KEY:
+        required: true
+      GOOGLE_DEFAULT_CLIENT_ID:
+        required: true
+      GOOGLE_DEFAULT_CLIENT_SECRET:
+        required: true
     outputs:
       finished:
         value: ${{ inputs.finished == 'true' && 'true' || jobs.stage.outputs.finished }}
@@ -114,6 +120,9 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           CHANNEL: ${{ inputs.channel }}
           BRAVE_SERVICES_KEY: ${{ secrets.BRAVE_SERVICES_KEY }}
+          SYNC_GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          SYNC_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_DEFAULT_CLIENT_ID }}
+          SYNC_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_DEFAULT_CLIENT_SECRET }}
           RESUME_COMMIT: ${{ steps.recovery.outputs.commit }}
         run: |
           python scripts/stage.py --mode $env:BUILD_MODE --tag $env:UPSTREAM_TAG --sha $env:UPSTREAM_SHA --release-tag $env:RELEASE_TAG --channel $env:CHANNEL --resume-commit "$env:RESUME_COMMIT"

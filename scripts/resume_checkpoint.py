@@ -1,4 +1,4 @@
-"""Resume only trusted checkpoints with unchanged browser source/build inputs."""
+"""Resume trusted checkpoints, replaying appended Brave C++ fixes before building."""
 import argparse
 import hashlib
 import json
@@ -51,14 +51,49 @@ def original_digest(commit, names, windows_order=False):
     return identity.hexdigest()
 
 
+def appended_patches(old_read, current_read):
+    old, old_names = inputs(old_read)
+    current, current_names = inputs(current_read)
+    if old == current:
+        return []
+    if current_names[:len(old_names)] != old_names or len(current_names) <= len(old_names):
+        raise ValueError("Checkpoint browser patches, toolchain or build settings have changed")
+    # Existing patches and initialization/toolchain inputs must remain identical.
+    def prefix_read(path):
+        return old_read(path) if path == "patches/series" else current_read(path)
+    if inputs(prefix_read)[0] != old:
+        raise ValueError("Checkpoint browser patches, toolchain or build settings have changed")
+    extra = current_names[len(old_names):]
+    for name in extra:
+        patch = current_read(f"patches/{name}").decode()
+        headers = re.findall(r"(?m)^diff --git (.+)$", patch)
+        files = [re.fullmatch(r"a/(\S+) b/(\S+)", header) for header in headers]
+        if not files or any(match is None for match in files):
+            raise ValueError("Checkpoint recovery only supports appended Brave C++ patches")
+        if any(a != b or "\\" in a or ".." in PurePosixPath(a).parts or
+                            not a.startswith(("browser/", "components/")) or
+                            not a.endswith((".cc", ".h")) for a, b in (match.groups() for match in files)):
+            raise ValueError("Checkpoint recovery only supports appended Brave C++ patches")
+    return extra
+
+
 def check_compatibility(commit):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Invalid checkpoint pipeline commit")
-    old, names = inputs(lambda path: git_file(commit, path))
-    current, _ = inputs(lambda path: (ROOT / path).read_bytes())
-    if old != current:
-        raise ValueError("Checkpoint browser patches, toolchain or build settings have changed")
+    old_read = lambda path: git_file(commit, path)
+    _, names = inputs(old_read)
+    appended_patches(old_read, lambda path: (ROOT / path).read_bytes())
     return {original_digest(commit, names), original_digest(commit, names, windows_order=True)}
+
+
+def apply_checkpoint_patches(root, commit):
+    if not commit:
+        return
+    for name in appended_patches(lambda path: git_file(commit, path),
+                                 lambda path: (ROOT / path).read_bytes()):
+        print(f"Replaying incremental browser fix: {name}", flush=True)
+        subprocess.run(["git", "am", "--keep-cr", str(ROOT / "patches" / name)],
+                       cwd=root / "src/brave", check=True)
 
 
 def check_run(run_id, repository):

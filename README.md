@@ -94,7 +94,10 @@ expire after five days, and successful publication removes the final artifact.
 To recover an interrupted run, dispatch the build workflow with its explicit
 `upstream_tag`, the earlier `resume_run_id`, and its `resume_stage` checkpoint
 number. Recovery checks the original pipeline identity and requires identical
-browser patches, source preparation, GN settings, channel, and toolchain.
+existing browser patches, source preparation, GN settings, channel, and toolchain.
+Appended patches limited to ordinary Brave C++ files can be replayed onto a
+verified checkpoint before compiling; modified or reordered patches and changes
+that require source initialization are rejected.
 Updater or checkpoint-handling changes can reuse the existing browser objects.
 Legacy checkpoints without an integrity manifest require this explicit recovery
 path and a complete tar/gzip validation before extraction. The earlier run's
@@ -195,7 +198,9 @@ supported by [Chromium](https://www.chromium.org/developers/how-tos/api-keys/).
 The original successful Sync test validates the starting patch set; every new
 upstream version should still be checked with your account. Release tests start
 both the browser and installed launcher without Google environment overrides
-and require sign-in to remain enabled. They do not sign in to a Google account.
+and require sign-in to remain enabled. An anonymous network check also requires
+Sync requests to reach Google directly rather than Brave's clients4 proxy.
+These checks do not sign in to a Google account.
 
 ## Maintain the patches
 

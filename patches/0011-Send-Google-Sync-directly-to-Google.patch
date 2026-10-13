@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Loukious <build@users.noreply.github.com>
+Date: Tue, 13 Oct 2026 17:40:00 +0100
+Subject: [PATCH] Send Google Sync directly to Google
+
+diff --git a/browser/net/brave_common_static_redirect_network_delegate_helper.cc b/browser/net/brave_common_static_redirect_network_delegate_helper.cc
+--- a/browser/net/brave_common_static_redirect_network_delegate_helper.cc
++++ b/browser/net/brave_common_static_redirect_network_delegate_helper.cc
+@@ -80,7 +80,8 @@ int OnBeforeURLRequest_CommonStaticRedirectWorkForGURL(
+     return net::OK;
+   }
+ 
+-  if (clients4_pattern->MatchesHost(request_url)) {
++  if (clients4_pattern->MatchesHost(request_url) &&
++      !base::StartsWith(request_url.path(), "/chrome-sync/")) {
+     replacements.SetSchemeStr("https");
+     replacements.SetHostStr(kBraveClients4Proxy);
+     *new_url = request_url.ReplaceComponents(replacements);
+diff --git a/browser/net/brave_common_static_redirect_network_delegate_helper_unittest.cc b/browser/net/brave_common_static_redirect_network_delegate_helper_unittest.cc
+--- a/browser/net/brave_common_static_redirect_network_delegate_helper_unittest.cc
++++ b/browser/net/brave_common_static_redirect_network_delegate_helper_unittest.cc
+@@ -88,7 +88,7 @@ TYPED_TEST(BraveCommonStaticRedirectNetworkDelegateHelperTest,
+ 
+ TYPED_TEST(BraveCommonStaticRedirectNetworkDelegateHelperTest,
+            RedirectGoogleClients4) {
+-  const GURL url("https://clients4.google.com/chrome-sync/dev");
++  const GURL url("https://clients4.google.com/some-service/path");
+   auto request_info = this->MakeRequest(url);
+ 
+   int rc = OnBeforeURLRequest_CommonStaticRedirectWork(ResponseCallback(),
+@@ -100,6 +100,20 @@ TYPED_TEST(BraveCommonStaticRedirectNetworkDelegateHelperTest,
+   EXPECT_EQ(rc, net::OK);
+ }
+ 
++TYPED_TEST(BraveCommonStaticRedirectNetworkDelegateHelperTest,
++           DoNotRedirectGoogleChromeSync) {
++  for (const auto* path : {"/chrome-sync/command/",
++                           "/chrome-sync/dev/command/"}) {
++    const GURL url(std::string("https://clients4.google.com") + path);
++    auto request_info = this->MakeRequest(url);
++
++    int rc = OnBeforeURLRequest_CommonStaticRedirectWork(ResponseCallback(),
++                                                         request_info);
++    EXPECT_TRUE(request_info->new_url_spec().empty());
++    EXPECT_EQ(rc, net::OK);
++  }
++}
++
+ TYPED_TEST(BraveCommonStaticRedirectNetworkDelegateHelperTest,
+            RedirectBugsChromium) {
+   // Check when we will redirect.
+-- 
+2.53.0

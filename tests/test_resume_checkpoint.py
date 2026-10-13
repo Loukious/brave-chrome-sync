@@ -3,14 +3,57 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from resume_checkpoint import inputs, check_marker, check_run, original_digest
+from resume_checkpoint import inputs, check_marker, check_run, original_digest, appended_patches, apply_checkpoint_patches
 
 
 class ResumeTests(unittest.TestCase):
+    def cpp_patch(self, name="browser/net/fix.cc"):
+        return f"diff --git a/{name} b/{name}\n--- a/{name}\n+++ b/{name}\n@@ -1 +1 @@\n-old\n+new\n".encode()
+
+    def test_appended_cpp_fix_is_replayed(self):
+        old = self.fixture()
+        current = {**old, "patches/series": b"one.patch\nfix.patch\n",
+                   "patches/fix.patch": self.cpp_patch()}
+        self.assertEqual(appended_patches(old.__getitem__, current.__getitem__), ["fix.patch"])
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name, data in current.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            with patch("resume_checkpoint.git_file", side_effect=lambda commit, path: old[path]), \
+                 patch("resume_checkpoint.ROOT", root), patch("resume_checkpoint.subprocess.run") as git:
+                apply_checkpoint_patches(Path("build"), "commit")
+                self.assertEqual(git.call_count, 1)
+                self.assertEqual(git.call_args.kwargs["cwd"], Path("build/src/brave"))
+                self.assertEqual(git.call_args.args[0], ["git", "am", "--keep-cr", str(root / "patches/fix.patch")])
+                self.assertTrue(git.call_args.kwargs["check"])
+
+    def test_appended_fix_cannot_hide_changed_original_inputs(self):
+        old = self.fixture()
+        current = {**old, "patches/series": b"one.patch\nfix.patch\n", "patches/fix.patch": self.cpp_patch()}
+        for field in ["patches/one.patch", "scripts/prepare.py", "scripts/runner-setup.ps1"]:
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "changed"):
+                appended_patches(old.__getitem__, {**current, field: old[field] + b"changed"}.__getitem__)
+        changed = {**current, "config.json": current["config.json"].replace(b'"windows"', b'"other"')}
+        with self.assertRaisesRegex(ValueError, "changed"):
+            appended_patches(old.__getitem__, changed.__getitem__)
+        for series in [b"fix.patch\none.patch\n", b"fix.patch\n"]:
+            with self.assertRaisesRegex(ValueError, "changed"):
+                appended_patches(old.__getitem__, {**current, "patches/series": series}.__getitem__)
+
+    def test_append_requires_normal_brave_cpp_without_initialization_changes(self):
+        old = self.fixture()
+        for name in ["patches/chromium.patch", "browser/BUILD.gn", "rewrite/fix.cc", "browser/../fix.cc"]:
+            current = {**old, "patches/series": b"one.patch\nfix.patch\n", "patches/fix.patch": self.cpp_patch(name)}
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "Brave C\\+\\+"):
+                appended_patches(old.__getitem__, current.__getitem__)
+
     def fixture(self):
         config = {"gn_args": {"is_debug": False}, "release_channel": "release",
                   "runner": "windows", "node_version": "24.x", "pnpm_version": "11.11.0",

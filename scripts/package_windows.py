@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -14,6 +15,15 @@ from upstream import ROOT
 
 INNO_URL = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
 INNO_SHA256 = "0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f"
+
+
+def google_configuration(environment):
+    names = {"api_key": "SYNC_GOOGLE_API_KEY", "client_id": "SYNC_GOOGLE_CLIENT_ID",
+             "client_secret": "SYNC_GOOGLE_CLIENT_SECRET"}
+    values = {key: environment.get(name, "") for key, name in names.items()}
+    if any(not value.strip() or value == "dummytoken" for value in values.values()):
+        raise ValueError("Packaging requires the working Google API key and OAuth client configuration")
+    return values
 
 
 def compiler():
@@ -61,6 +71,7 @@ def normalize_payload(app):
 
 
 def package_browser(archive, dist, release_tag, channel, version, published):
+    google = google_configuration(os.environ)
     work = ROOT / "work" / f"package-{release_tag}"
     if work.exists():
         raise ValueError(f"Packaging directory already exists: {work}")
@@ -69,8 +80,11 @@ def package_browser(archive, dist, release_tag, channel, version, published):
         stream.extractall(app)
     browser, payload = normalize_payload(app)
     publish = work / "updater"
+    runtime = work / "google-client-configuration.json"
+    runtime.write_text(json.dumps(google), encoding="utf-8")
     run("dotnet", "publish", ROOT / "updater/SyncBrowser.csproj", "-c", "Release",
-        "-r", "win-x64", "--self-contained", "true", "-o", publish)
+        "-r", "win-x64", "--self-contained", "true", "-o", publish,
+        f"-p:GoogleClientConfiguration={runtime}")
     shutil.copy2(publish / "SyncBrowser.exe", payload / "SyncUpdater.exe")
     (payload / "sync-release.json").write_text(json.dumps({"release_tag": release_tag,
         "channel": channel, "protocol": 1}, indent=2) + "\n", encoding="utf-8")

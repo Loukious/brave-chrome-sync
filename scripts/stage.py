@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from prepare import run
 from upstream import ROOT, digest
-from package_windows import package_browser
+from package_windows import package_browser, google_configuration
 from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint
 from resume_checkpoint import check_marker
 from extension_services import check_build_key, check_service
@@ -21,7 +21,8 @@ from windows_build_process import run_build
 
 
 def timed_run(command, cwd, seconds):
-    print("+", " ".join(map(str, command)), flush=True)
+    print("+", " ".join("--gn=google_configuration:[configured]" if str(part).startswith("--gn=google_") else str(part)
+                        for part in command), flush=True)
     return run_build(command, cwd, seconds)
 
 
@@ -76,13 +77,14 @@ def package(root, dist, tag, sha, release_tag, channel):
                 "patch_digest": digest(), "gn_args": config["gn_args"],
                 "pipeline_commit": os.environ.get("GITHUB_SHA", "local"),
                 "workflow_run": os.environ.get("GITHUB_RUN_ID", "local"),
-                "google_credentials": "runtime only", "native_updater": True,
+                "google_credentials": "desktop application configuration; no user credentials", "native_updater": True,
                 "updater_protocol": 1, "installer": installer.name,
                 "extension_service_manifest_test": extension_service,
                 "devtools_target_smoke_test": True,
                 "shared_default_profile_smoke_test": True,
                 "taskbar_launch_smoke_test": True,
                 "default_browser_registration_test": True,
+                "google_signin_enabled_smoke_test": True,
                 "installer_smoke_test": installer_smoke, "browser_smoke_test": smoke}
     (dist / "build-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(ROOT / "scripts/Update-BraveChromeSync.ps1", dist)
@@ -105,6 +107,7 @@ def smoke_test(root, archive):
     if len(executables) != 1:
         raise ValueError("Packaged browser executable is missing or ambiguous")
     result = launch_smoke_test(executables[0], profile)
+    run("node", ROOT / "scripts/smoke_signin.mjs", executables[0], root / "direct-signin-smoke-profile")
     run("node", ROOT / "scripts/smoke_devtools.mjs", executables[0], root / "devtools-smoke-profile")
     return result
 
@@ -122,6 +125,7 @@ def installer_smoke_test(root, installer, release_tag, channel):
     # Launch through the same stable executable used by shortcuts, with an isolated profile.
     result = launch_smoke_test(install / "SyncBrowser.exe", root / "installer-smoke-profile",
                               launcher=True)
+    run("node", ROOT / "scripts/smoke_signin.mjs", install / "SyncBrowser.exe", root / "signin-smoke-profile")
     run("node", ROOT / "scripts/smoke_profile.mjs", install / pointer["browser"],
         install / "SyncBrowser.exe", root / "profile-smoke-localappdata")
     run("node", ROOT / "scripts/smoke_taskbar.mjs", install / pointer["browser"],
@@ -209,6 +213,10 @@ def main():
                f"--channel={args.channel}", "--skip_signing", "--use_remoteexec=false",
                "--target=create_dist_zips", f"--ninja=j:{config['compile_jobs']}"]
     command += [f"--gn={key}:{json.dumps(value)}" for key, value in config["gn_args"].items()]
+    google = google_configuration(os.environ)
+    command += [f"--gn={name}:{json.dumps(google[key])}" for name, key in
+                [("google_api_key", "api_key"), ("google_default_client_id", "client_id"),
+                 ("google_default_client_secret", "client_secret")]]
     # Brave only forwards its --ninja=j value into SISO_LIMITS for remoteexec
     # builds. Set the local limit explicitly for this offline compilation.
     os.environ["SISO_LIMITS"] = f"local={config['compile_jobs']}"

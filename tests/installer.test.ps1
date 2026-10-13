@@ -13,11 +13,14 @@ New-Item $profile -ItemType Directory | Out-Null
 Set-Content (Join-Path $profile 'sentinel.txt') 'profile remains'
 $capture = Join-Path $root 'arguments with spaces.json'
 $launcher = Join-Path $root 'SyncBrowser.exe'
-$initialLauncher = Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$capture`"", "--user-data-dir=`"$profile`"", 'https://example.test/a?x=one&y=two') -WindowStyle Hidden -PassThru
+$googleCapture = Join-Path $root 'google-configuration.json'
+$initialLauncher = Start-Process -FilePath $launcher -ArgumentList @("--fixture-args=`"$capture`"", "--fixture-google=`"$googleCapture`"", "--user-data-dir=`"$profile`"", 'https://example.test/a?x=one&y=two') -WindowStyle Hidden -PassThru
 if (-not $initialLauncher.WaitForExit(30000) -or $initialLauncher.ExitCode -ne 0) { throw 'Initial launcher failed.' }
 $deadline = [datetime]::UtcNow.AddSeconds(30)
 while (-not (Test-Path $capture) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
 $arguments = Get-Content $capture -Raw | ConvertFrom-Json
+$google = Get-Content $googleCapture -Raw | ConvertFrom-Json
+if (($google -join '|') -ne 'fixture-api-key|fixture.apps.googleusercontent.com|fixture-client-secret') { throw 'Installed launcher did not supply packaged Google configuration.' }
 if ($arguments -contains '--root' -or $arguments -notcontains "--user-data-dir=$profile" -or $arguments -notcontains 'https://example.test/a?x=one&y=two') { throw 'Launcher damaged browser arguments.' }
 if ((Get-Content (Join-Path $profile 'sentinel.txt') -Raw).Trim() -ne 'profile remains') { throw 'Profile changed during installation or launch.' }
 $shell = New-Object -ComObject WScript.Shell
@@ -55,7 +58,8 @@ Copy-Item (Join-Path $root "versions/$tag") $newFolder -Recurse
 $restartCapture = Join-Path $root 'restart-arguments.json'
 $helper = Join-Path $root "versions/$tag/SyncUpdater.exe"
 if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { throw 'Fixture parent exited before the relaunch test began.' }
-$restart = Start-Process -FilePath $helper -ArgumentList @('--relaunch', "--parent-pid=$parentPid", '--', "--fixture-args=`"$restartCapture`"", "--user-data-dir=`"$profile`"", '--restore-last-session') -WindowStyle Hidden -PassThru
+$restartGoogleCapture = Join-Path $root 'restart-google-configuration.json'
+$restart = Start-Process -FilePath $helper -ArgumentList @('--relaunch', "--parent-pid=$parentPid", '--', "--fixture-args=`"$restartCapture`"", "--fixture-google=`"$restartGoogleCapture`"", "--user-data-dir=`"$profile`"", '--restore-last-session') -WindowStyle Hidden -PassThru
 Start-Sleep -Milliseconds 500
 if (-not (Get-Process -Id $parentPid -ErrorAction SilentlyContinue)) { throw 'Fixture parent exited before the activation assertion.' }
 if ((Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json).tag -ne $tag) { throw 'Update activated while parent browser was running.' }
@@ -64,6 +68,7 @@ if (-not $restart.WaitForExit(30000) -or $restart.ExitCode -ne 0) { throw 'Relau
 $deadline = [datetime]::UtcNow.AddSeconds(30)
 while (-not (Test-Path $restartCapture) -and [datetime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
 $restartArguments = Get-Content $restartCapture -Raw | ConvertFrom-Json
+if (((Get-Content $restartGoogleCapture -Raw | ConvertFrom-Json) -join '|') -ne ($google -join '|')) { throw 'Relaunch lost Google configuration.' }
 if ((Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json).tag -ne $newTag -or $restartArguments -notcontains '--restore-last-session') { throw 'Relaunch did not activate the staged version and restore session arguments.' }
 if ((Get-Content (Join-Path $root 'previous.json') -Raw | ConvertFrom-Json).tag -ne $tag -or (Get-Content (Join-Path $profile 'sentinel.txt') -Raw).Trim() -ne 'profile remains') { throw 'Relaunch lost the previous version or profile.' }
 & (Join-Path $PSScriptRoot 'browser-registration.test.ps1') -InstallRoot $root -Channel 'nightly'

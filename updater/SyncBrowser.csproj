@@ -12,4 +12,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
+  <ItemGroup Condition="'$(GoogleClientConfiguration)' != ''">
+    <EmbeddedResource Include="$(GoogleClientConfiguration)" LogicalName="SyncBrowser.GoogleClientConfiguration.json" />
+  </ItemGroup>
 </Project>

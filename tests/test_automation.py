@@ -101,6 +101,7 @@ class PublishTests(unittest.TestCase):
                     "shared_default_profile_smoke_test": True,
                     "taskbar_launch_smoke_test": True,
                     "default_browser_registration_test": True,
+                    "google_signin_enabled_smoke_test": True,
                     "gn_args": {"is_official_build": True, "is_debug": False, "is_component_build": False},
                     "native_updater": True, "updater_protocol": 1, "channel": "nightly",
                     "installer": "fixture-windows-x64-setup.exe", "installer_smoke_test": "Chrome/155.0.0.0"}

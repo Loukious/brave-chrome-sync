@@ -164,6 +164,41 @@ await Test("update lock serializes checks", async () => {
     await checking;
 });
 
+await Test("packaged Google configuration reaches the browser environment", () => {
+    var start = new System.Diagnostics.ProcessStartInfo("fixture");
+    foreach (var name in GoogleClientConfiguration.Variables) start.Environment.Remove(name);
+    GoogleClientConfiguration.Apply(start, new("fixture-api", "fixture-client", "fixture-secret"));
+    Assert(start.Environment["GOOGLE_API_KEY"] == "fixture-api" &&
+           start.Environment["GOOGLE_DEFAULT_CLIENT_ID"] == "fixture-client" &&
+           start.Environment["GOOGLE_DEFAULT_CLIENT_SECRET"] == "fixture-secret", "Packaged configuration was not forwarded");
+    return Task.CompletedTask;
+});
+
+await Test("explicit complete Google configuration remains unchanged", () => {
+    var start = new System.Diagnostics.ProcessStartInfo("fixture");
+    foreach (var name in GoogleClientConfiguration.Variables) start.Environment[name] = "custom-" + name;
+    GoogleClientConfiguration.Apply(start, new("fixture-api", "fixture-client", "fixture-secret"));
+    Assert(GoogleClientConfiguration.Variables.All(name => start.Environment[name] == "custom-" + name), "Explicit runtime configuration changed");
+    return Task.CompletedTask;
+});
+
+await Test("missing configuration fails before launching a browser", () => {
+    var start = new System.Diagnostics.ProcessStartInfo("fixture");
+    foreach (var name in GoogleClientConfiguration.Variables) start.Environment.Remove(name);
+    try { GoogleClientConfiguration.Apply(start, new("", "", "")); }
+    catch (InvalidDataException) { return Task.CompletedTask; }
+    throw new Exception("Missing configuration could sign users out");
+});
+
+await Test("a custom OAuth client cannot use an unrelated default secret", () => {
+    var start = new System.Diagnostics.ProcessStartInfo("fixture");
+    foreach (var name in GoogleClientConfiguration.Variables) start.Environment.Remove(name);
+    start.Environment["GOOGLE_DEFAULT_CLIENT_ID"] = "custom-client";
+    try { GoogleClientConfiguration.Apply(start, new("fixture-api", "fixture-client", "fixture-secret")); }
+    catch (InvalidDataException) { return Task.CompletedTask; }
+    throw new Exception("A mismatched OAuth client was accepted");
+});
+
 Console.WriteLine($"{passed} updater scenarios passed. Fixtures retained at {testRoot}");
 
 sealed class FakeGitHub(string releases, byte[] payload, string sums) : HttpMessageHandler

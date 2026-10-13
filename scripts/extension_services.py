@@ -50,14 +50,16 @@ def check_build_key(output):
         raise ValueError("Compiled Brave service key does not match this build's configured key")
 
 
-def check_service(tag):
+def check_service(tag, chromium_version=None):
     from upstream import api, version
     major, minor, build = version(tag)
-    package = api(f"repos/brave/brave-core/contents/package.json?ref={tag}")
-    config = json.loads(base64.b64decode(package["content"]))
-    chromium_major = config["config"]["projects"]["chrome"]["tag"].split(".")[0]
-    if not chromium_major.isdecimal():
+    if chromium_version is None:
+        package = api(f"repos/brave/brave-core/contents/package.json?ref={tag}")
+        config = json.loads(base64.b64decode(package["content"]))
+        chromium_version = config["config"]["projects"]["chrome"]["tag"]
+    if not isinstance(chromium_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", chromium_version):
         raise ValueError("Upstream returned an invalid Chromium version")
+    chromium_major = chromium_version.split(".")[0]
     query = {"response": "redirect", "os": "win", "arch": "x64",
              "prod": "chromiumcrx", "prodchannel": "",
              "prodversion": f"{chromium_major}.{major}.{minor}.{build}", "lang": "en-US",

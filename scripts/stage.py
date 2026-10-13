@@ -56,7 +56,9 @@ def restore(root, checkpoint, allow_legacy=False):
 
 def package(root, dist, tag, sha, release_tag, channel):
     check_build_key(root / "src/out/Sync")
-    extension_service = check_service(tag)
+    target = root / "src/brave"
+    package_json = json.loads((target / "package.json").read_text())
+    extension_service = check_service(tag, package_json["config"]["projects"]["chrome"]["tag"])
     dist.mkdir(parents=True, exist_ok=True)
     candidates = list((root / "src/out/Sync/dist").glob("*.zip"))
     if len(candidates) != 1:
@@ -65,11 +67,9 @@ def package(root, dist, tag, sha, release_tag, channel):
                                              tag, datetime.now(timezone.utc).isoformat())
     smoke = smoke_test(root, destination)
     installer_smoke = installer_smoke_test(root, installer, release_tag, channel)
-    target = root / "src/brave"
     run("git", "archive", "--format=tar.gz", "--prefix=brave-core/",
         f"--output={dist / 'patched-brave-core.tar.gz'}", "HEAD", cwd=target)
     config = json.loads((ROOT / "config.json").read_text())
-    package_json = json.loads((target / "package.json").read_text())
     metadata = {"upstream_tag": tag, "upstream_sha": sha,
                 "upstream_source_channel": config["upstream_channel"],
                 "chromium_version": package_json["config"]["projects"]["chrome"]["tag"],

@@ -4,14 +4,35 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+from urllib.parse import urlsplit, parse_qs
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from extension_services import UBLOCK_ID, check_build_key, parse_manifest, service_key
+from extension_services import UBLOCK_ID, check_build_key, parse_manifest, service_key, check_service
 from prepare import write_environment
 
 
 class ExtensionServiceTests(unittest.TestCase):
+    def test_packaging_uses_verified_checkout_version_without_github_api(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = self.manifest("https://brave-core-ext.s3.brave.com/release/uBlock.crx")
+        with patch.dict(os.environ, {"BRAVE_SERVICES_KEY": "fixture-service-key"}), \
+             patch("upstream.api") as github, patch("extension_services.build_opener") as opener:
+            opener.return_value.open.return_value = response
+            result = check_service("v1.99.9", "155.0.8059.30")
+            github.assert_not_called()
+            request = opener.return_value.open.call_args.args[0]
+            query = parse_qs(urlsplit(request.full_url).query)
+            self.assertEqual(query["prodversion"], ["155.1.99.9"])
+            self.assertEqual(result, {"status": 200, "extension_id": UBLOCK_ID})
+
+    def test_invalid_checkout_chromium_version_does_not_contact_service(self):
+        for version in ["bad", "155/other", "155", "", 155]:
+            with self.subTest(version=version), patch("extension_services.build_opener") as opener:
+                with self.assertRaisesRegex(ValueError, "invalid Chromium version"):
+                    check_service("v1.99.9", version)
+                opener.assert_not_called()
+
     def manifest(self, url, extension_id=UBLOCK_ID):
         return json.dumps({"gupdate": {"app": [{"appid": extension_id,
                             "updatecheck": {"codebase": url}}]}}).encode()

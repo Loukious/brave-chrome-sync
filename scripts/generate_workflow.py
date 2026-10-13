@@ -105,6 +105,9 @@ jobs:
     uses: ./.github/workflows/windows-stage.yml
     secrets:
       BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
+      GOOGLE_API_KEY: ${{{{ secrets.GOOGLE_API_KEY }}}}
+      GOOGLE_DEFAULT_CLIENT_ID: ${{{{ secrets.GOOGLE_DEFAULT_CLIENT_ID }}}}
+      GOOGLE_DEFAULT_CLIENT_SECRET: ${{{{ secrets.GOOGLE_DEFAULT_CLIENT_SECRET }}}}
     with:
       mode: ${{{{ inputs.resume_run_id != '' && 'compile' || 'prepare' }}}}
       stage: 0
@@ -125,6 +128,9 @@ jobs:
     uses: ./.github/workflows/windows-stage.yml
     secrets:
       BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
+      GOOGLE_API_KEY: ${{{{ secrets.GOOGLE_API_KEY }}}}
+      GOOGLE_DEFAULT_CLIENT_ID: ${{{{ secrets.GOOGLE_DEFAULT_CLIENT_ID }}}}
+      GOOGLE_DEFAULT_CLIENT_SECRET: ${{{{ secrets.GOOGLE_DEFAULT_CLIENT_SECRET }}}}
     with:
       mode: compile
       stage: {stage}

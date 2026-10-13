@@ -1,5 +1,6 @@
 """Compile the production installer around a tiny fixture executable."""
 import sys
+import os
 from pathlib import Path
 import zipfile
 
@@ -17,6 +18,9 @@ with zipfile.ZipFile(archive, "w") as stream:
             # flat payload that hides packaging problems from installer tests.
             name = path.name if path.name == "brave.exe" else "155.1.99.8/" + path.name
             stream.write(path, name)
+os.environ.update(SYNC_GOOGLE_API_KEY="fixture-api-key",
+                  SYNC_GOOGLE_CLIENT_ID="fixture.apps.googleusercontent.com",
+                  SYNC_GOOGLE_CLIENT_SECRET="fixture-client-secret")
 dist = ROOT / "work/installer-fixture-dist"
 dist.mkdir(exist_ok=True)
 package_browser(archive, dist, "v1.99.8-sync.r2.0123456789ab", "nightly", "v1.99.8", "2026-10-03T00:00:00Z")

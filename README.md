@@ -172,7 +172,14 @@ See [extension service configuration](docs/EXTENSIONS.md).
 
 ## Google credentials
 
-Use the same working credentials you tested, supplied **at runtime**:
+Release builds take the tested desktop Google application configuration from
+the `GOOGLE_API_KEY`, `GOOGLE_DEFAULT_CLIENT_ID` and
+`GOOGLE_DEFAULT_CLIENT_SECRET` GitHub Secrets. It is included in the browser
+and launcher, so sign-in remains enabled during upgrades from older launchers
+and through direct browser launches. Users do not need environment variables.
+This is application configuration, not account passwords or sign-in tokens.
+
+Custom runtime overrides remain supported:
 
 ```powershell
 $env:GOOGLE_API_KEY = 'your-working-api-key'
@@ -181,12 +188,14 @@ $env:GOOGLE_DEFAULT_CLIENT_SECRET = 'your-working-client-secret'
 pwsh -File .\Start-BraveChromeSync.ps1
 ```
 
-Do not commit these values. The public build intentionally embeds no Google
-credentials, and checkpoint artifacts contain none. Runtime variables are
+Do not commit these values. Desktop application configuration is part of the
+distributed binaries and cached build inputs. User account credentials and
+profiles are never included in releases or checkpoints. Runtime variables are
 supported by [Chromium](https://www.chromium.org/developers/how-tos/api-keys/).
 The original successful Sync test validates the starting patch set; every new
-upstream version should still be checked with your account. The headless CI
-startup test does not sign in to a Google account.
+upstream version should still be checked with your account. Release tests start
+both the browser and installed launcher without Google environment overrides
+and require sign-in to remain enabled. They do not sign in to a Google account.
 
 ## Maintain the patches
 

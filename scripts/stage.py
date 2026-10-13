@@ -15,7 +15,7 @@ from prepare import run
 from upstream import ROOT, digest
 from package_windows import package_browser, google_configuration
 from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint
-from resume_checkpoint import check_marker
+from resume_checkpoint import check_marker, apply_checkpoint_patches
 from extension_services import check_build_key, check_service
 from windows_build_process import run_build
 
@@ -85,6 +85,7 @@ def package(root, dist, tag, sha, release_tag, channel):
                 "taskbar_launch_smoke_test": True,
                 "default_browser_registration_test": True,
                 "google_signin_enabled_smoke_test": True,
+                "google_sync_network_route_smoke_test": True,
                 "installer_smoke_test": installer_smoke, "browser_smoke_test": smoke}
     (dist / "build-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(ROOT / "scripts/Update-BraveChromeSync.ps1", dist)
@@ -108,6 +109,7 @@ def smoke_test(root, archive):
         raise ValueError("Packaged browser executable is missing or ambiguous")
     result = launch_smoke_test(executables[0], profile)
     run("node", ROOT / "scripts/smoke_signin.mjs", executables[0], root / "direct-signin-smoke-profile")
+    run("node", ROOT / "scripts/smoke_sync_route.mjs", executables[0], root / "direct-sync-route-smoke-profile")
     run("node", ROOT / "scripts/smoke_devtools.mjs", executables[0], root / "devtools-smoke-profile")
     return result
 
@@ -126,6 +128,7 @@ def installer_smoke_test(root, installer, release_tag, channel):
     result = launch_smoke_test(install / "SyncBrowser.exe", root / "installer-smoke-profile",
                               launcher=True)
     run("node", ROOT / "scripts/smoke_signin.mjs", install / "SyncBrowser.exe", root / "signin-smoke-profile")
+    run("node", ROOT / "scripts/smoke_sync_route.mjs", install / "SyncBrowser.exe", root / "sync-route-smoke-profile")
     run("node", ROOT / "scripts/smoke_profile.mjs", install / pointer["browser"],
         install / "SyncBrowser.exe", root / "profile-smoke-localappdata")
     run("node", ROOT / "scripts/smoke_taskbar.mjs", install / pointer["browser"],
@@ -204,6 +207,7 @@ def main():
     restore(root, args.checkpoint, allow_legacy=bool(args.resume_commit))
     marker = json.loads((root / "prepared.json").read_text())
     marker = check_marker(marker, args.tag, args.sha, digest(), args.resume_commit)
+    apply_checkpoint_patches(root, args.resume_commit)
     (root / "prepared.json").write_text(json.dumps(marker), encoding="utf-8")
     pnpm = shutil.which("pnpm.cmd") or shutil.which("pnpm")
     if not pnpm:

@@ -24,6 +24,8 @@ def verify(root):
         raise ValueError("Windows default browser registration was not validated")
     if metadata.get("google_signin_enabled_smoke_test") is not True:
         raise ValueError("Packaged Google sign-in configuration was not validated")
+    if metadata.get("google_sync_network_route_smoke_test") is not True:
+        raise ValueError("Packaged Google Sync network routing was not validated")
     if metadata.get("native_updater") is not True or metadata.get("updater_protocol") != 1 or not metadata.get("installer_smoke_test"):
         raise ValueError("Native updater and installed browser were not validated")
     installer = metadata.get("installer", "")
@@ -73,9 +75,9 @@ def verify(root):
         f"Windows x64 installer and portable build based on Brave **{metadata['upstream_tag']}** "
         f"({metadata.get('upstream_source_channel', 'upstream')} source; Chromium {metadata['chromium_version']}).\n\n"
         "The restored Google sign-in and Sync patch set was tested successfully by its author. "
-        "Use your working Google API/OAuth credentials through runtime environment variables. "
-        "The packaged browser passed a headless startup test. Google Sync must still be "
-        "checked with your account and runtime credentials on this new version.\n\n"
+        "The browser includes desktop Google client configuration and checks that sign-in is enabled "
+        "and Sync requests go directly to Google. Sign in normally to use your account. "
+        "No runtime configuration is required.\n\n"
         "Install the **-setup.exe** asset for shortcuts and automatic GitHub updates. "
         "About Brave checks, downloads and verifies updates, then offers Relaunch. "
         "Background checks run at startup and every six hours when Windows permits the scheduled task. "

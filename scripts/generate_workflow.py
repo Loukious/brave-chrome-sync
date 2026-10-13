@@ -80,6 +80,7 @@ jobs:
           python-version: '3.13'
       - name: Check original Brave-hosted uBlock download
         env:
+          GH_TOKEN: ${{{{ github.token }}}}
           BRAVE_SERVICES_KEY: ${{{{ secrets.BRAVE_SERVICES_KEY }}}}
           UPSTREAM_TAG: ${{{{ needs.detect.outputs.upstream_tag }}}}
         run: python scripts/extension_services.py --tag "$UPSTREAM_TAG"

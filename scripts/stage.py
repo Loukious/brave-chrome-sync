@@ -26,6 +26,26 @@ def timed_run(command, cwd, seconds):
     return run_build(command, cwd, seconds)
 
 
+def compile_checked(command, root, seconds, patch_digest):
+    """Type-check Settings before spending the stage on the complete browser."""
+    deadline = time.monotonic() + seconds
+    marker = root / "settings-typecheck.json"
+    target = "chrome/browser/resources/settings:build_ts"
+    expected = {"patch_digest": patch_digest, "target": target}
+    validated = json.loads(marker.read_text()) if marker.exists() else None
+    if validated != expected:
+        print("Checking patched Settings TypeScript before the full browser build", flush=True)
+        preflight = [f"--target={target}" if str(part).startswith("--target=") else part for part in command]
+        result = timed_run(preflight, root / "src/brave", max(1, int(deadline - time.monotonic())))
+        if result != 0:
+            return result
+        marker.write_text(json.dumps(expected), encoding="utf-8")
+    remaining = int(deadline - time.monotonic())
+    if remaining <= 0:
+        return 124
+    return timed_run(command, root / "src/brave", remaining)
+
+
 def output(key, value):
     print(f"{key}={value}", flush=True)
     if path := os.environ.get("GITHUB_OUTPUT"):
@@ -224,7 +244,7 @@ def main():
     # Brave only forwards its --ninja=j value into SISO_LIMITS for remoteexec
     # builds. Set the local limit explicitly for this offline compilation.
     os.environ["SISO_LIMITS"] = f"local={config['compile_jobs']}"
-    result = timed_run(command, root / "src/brave", config["compile_minutes"] * 60)
+    result = compile_checked(command, root, config["compile_minutes"] * 60, marker["patch_digest"])
     if result == 124:
         output_dir = root / "src/out/Sync"
         if (output_dir / "gn_gen.guard").exists() or not (output_dir / "build.ninja").exists():

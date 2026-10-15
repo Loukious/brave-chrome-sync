@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +13,38 @@ from resume_checkpoint import inputs, check_marker, check_run, original_digest, 
 
 
 class ResumeTests(unittest.TestCase):
+    def test_incremental_template_removal_invalidates_cached_native_input(self):
+        old = self.fixture()
+        name = "chromium_src/chrome/browser/resources/settings/people_page/sync_controls.html.ts.lit_mangler.ts"
+        deletion = f"diff --git a/{name} b/{name}\ndeleted file mode 100644\n--- a/{name}\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n".encode()
+        current = {**old, "patches/series": b"one.patch\nfix.patch\n", "patches/fix.patch": deletion}
+        self.assertEqual(appended_patches(old.__getitem__, current.__getitem__), ["fix.patch"])
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for filename, data in current.items():
+                path = root / filename
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            build_root = root / "build"
+            native = build_root / "src/chrome/browser/resources/settings/people_page/sync_controls.html.ts"
+            native.parent.mkdir(parents=True)
+            native.write_text("original Chromium template")
+            os.utime(native, (1000, 1000))
+            with patch("resume_checkpoint.ROOT", root), \
+                 patch("resume_checkpoint.git_file", side_effect=lambda commit, path: old[path]), \
+                 patch("resume_checkpoint.subprocess.run") as git:
+                apply_checkpoint_patches(build_root, "commit")
+            self.assertEqual(git.call_count, 1)
+            self.assertGreater(native.stat().st_mtime, 1000)
+            self.assertEqual(native.read_text(), "original Chromium template")
+            native.unlink()
+            with patch("resume_checkpoint.ROOT", root), \
+                 patch("resume_checkpoint.git_file", side_effect=lambda commit, path: old[path]), \
+                 patch("resume_checkpoint.subprocess.run") as git:
+                with self.assertRaisesRegex(ValueError, "template input does not exist"):
+                    apply_checkpoint_patches(build_root, "commit")
+                git.assert_not_called()
+
     def cpp_patch(self, name="browser/net/fix.cc"):
         return f"diff --git a/{name} b/{name}\n--- a/{name}\n+++ b/{name}\n@@ -1 +1 @@\n-old\n+new\n".encode()
 
@@ -49,7 +82,8 @@ class ResumeTests(unittest.TestCase):
 
     def test_append_requires_normal_brave_cpp_without_initialization_changes(self):
         old = self.fixture()
-        for name in ["patches/chromium.patch", "browser/BUILD.gn", "rewrite/fix.cc", "browser/../fix.cc"]:
+        for name in ["patches/chromium.patch", "browser/BUILD.gn", "rewrite/fix.cc", "browser/../fix.cc",
+                     "chromium_src/chrome/browser/resources/settings/sync_controls.ts"]:
             current = {**old, "patches/series": b"one.patch\nfix.patch\n", "patches/fix.patch": self.cpp_patch(name)}
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "Brave C\\+\\+"):
                 appended_patches(old.__getitem__, current.__getitem__)

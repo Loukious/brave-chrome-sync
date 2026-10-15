@@ -1,4 +1,4 @@
-"""Resume trusted checkpoints, replaying appended Brave C++ fixes before building."""
+"""Resume trusted checkpoints, replaying appended build-time fixes before building."""
 import argparse
 import hashlib
 import json
@@ -70,10 +70,11 @@ def appended_patches(old_read, current_read):
         files = [re.fullmatch(r"a/(\S+) b/(\S+)", header) for header in headers]
         if not files or any(match is None for match in files):
             raise ValueError("Checkpoint recovery only supports appended Brave C++ patches")
-        if any(a != b or "\\" in a or ".." in PurePosixPath(a).parts or
-                            not a.startswith(("browser/", "components/")) or
-                            not a.endswith((".cc", ".h")) for a, b in (match.groups() for match in files)):
-            raise ValueError("Checkpoint recovery only supports appended Brave C++ patches")
+        for a, b in (match.groups() for match in files):
+            cpp = a.startswith(("browser/", "components/")) and a.endswith((".cc", ".h"))
+            template = a.startswith("chromium_src/") and a.endswith(".html.ts.lit_mangler.ts")
+            if a != b or "\\" in a or ".." in PurePosixPath(a).parts or not (cpp or template):
+                raise ValueError("Checkpoint recovery only supports appended Brave C++ or Lit template patches")
     return extra
 
 
@@ -91,9 +92,21 @@ def apply_checkpoint_patches(root, commit):
         return
     for name in appended_patches(lambda path: git_file(commit, path),
                                  lambda path: (ROOT / path).read_bytes()):
+        content = (ROOT / "patches" / name).read_text()
+        templates = []
+        for name_in_patch in re.findall(r"(?m)^diff --git a/(\S+) b/\S+$", content):
+            if name_in_patch.endswith(".html.ts.lit_mangler.ts"):
+                native = root / "src" / name_in_patch.removeprefix("chromium_src/").removesuffix(".lit_mangler.ts")
+                if not native.is_file():
+                    raise ValueError(f"Incremental template input does not exist: {native}")
+                templates.append(native)
         print(f"Replaying incremental browser fix: {name}", flush=True)
         subprocess.run(["git", "am", "--keep-cr", str(ROOT / "patches" / name)],
                        cwd=root / "src/brave", check=True)
+        # A removed mangler is absent from Brave's normal override scan. Its
+        # native input must still invalidate previously generated Settings HTML.
+        for native in templates:
+            os.utime(native, None)
 
 
 def check_run(run_id, repository):

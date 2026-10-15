@@ -95,13 +95,20 @@ To recover an interrupted run, dispatch the build workflow with its explicit
 `upstream_tag`, the earlier `resume_run_id`, and its `resume_stage` checkpoint
 number. Recovery checks the original pipeline identity and requires identical
 existing browser patches, source preparation, GN settings, channel, and toolchain.
-Appended patches limited to ordinary Brave C++ files can be replayed onto a
-verified checkpoint before compiling; modified or reordered patches and changes
+Appended patches limited to ordinary Brave C++ files and build-time Lit template
+overrides can be replayed onto a verified checkpoint before compiling. Changed
+templates invalidate the native Chromium input so cached HTML is regenerated.
+Modified or reordered patches and changes
 that require source initialization are rejected.
 Updater or checkpoint-handling changes can reuse the existing browser objects.
 Legacy checkpoints without an integrity manifest require this explicit recovery
 path and a complete tar/gzip validation before extraction. The earlier run's
 checkpoint is retained during recovery.
+
+Each source revision type-checks the patched Settings UI before compiling the
+complete browser. The result survives stage checkpoints, and both phases share
+the same stage time budget. Pull requests replay patches against both the pinned
+base and the newest configured upstream release.
 
 **This does not guarantee that Brave fits on a free runner.** Brave has a larger
 dependency tree than ungoogled Chromium. GitHub documents 16 GB RAM and 14 GB

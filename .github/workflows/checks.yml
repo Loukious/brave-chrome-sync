@@ -58,3 +58,12 @@ jobs:
           tag=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_tag"])')
           sha=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_commit"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/base-check" --tag "$tag" --sha "$sha" --patch-only
+      - name: Replay patches against the newest configured upstream
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/upstream.py --repository '' > "$RUNNER_TEMP/latest-upstream.json"
+          tag=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_tag"])')
+          sha=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_sha"])')
+          python scripts/prepare.py --root "$RUNNER_TEMP/latest-check" --tag "$tag" --sha "$sha" --patch-only

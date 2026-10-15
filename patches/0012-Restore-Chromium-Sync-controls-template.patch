@@ -1,0 +1,61 @@
+From b90a6a36e4fab585a318a5d77c66034bc39fdc88 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 15:32:06 +0100
+Subject: [PATCH] Restore Chromium Sync controls template
+
+---
+ .../sync_controls.html.ts.lit_mangler.ts      | 42 -------------------
+ 1 file changed, 42 deletions(-)
+ delete mode 100644 chromium_src/chrome/browser/resources/settings/people_page/sync_controls.html.ts.lit_mangler.ts
+
+diff --git a/chromium_src/chrome/browser/resources/settings/people_page/sync_controls.html.ts.lit_mangler.ts b/chromium_src/chrome/browser/resources/settings/people_page/sync_controls.html.ts.lit_mangler.ts
+deleted file mode 100644
+index aa4a2ff89..000000000
+--- a/chromium_src/chrome/browser/resources/settings/people_page/sync_controls.html.ts.lit_mangler.ts
++++ /dev/null
+@@ -1,42 +0,0 @@
+-// Copyright (c) 2026 The Brave Authors. All rights reserved.
+-// This Source Code Form is subject to the terms of the Mozilla Public
+-// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+-// You can obtain one at https://mozilla.org/MPL/2.0/.
+-
+-import { mangle } from 'lit_mangler'
+-
+-// Brave Sync doesn't support payments, so drop its toggle and add one for AI
+-// Chat. isAiChatSyncEnabled_ and aiChatCheckboxLabel_ come from
+-// rewrite/.../sync_controls.ts.yaml.
+-mangle((root) => {
+-  const paymentsToggle = root.querySelector('#paymentsCheckbox')
+-  if (!paymentsToggle?.parentElement) {
+-    throw new Error(`[Settings] Sync controls: couldn't find #paymentsCheckbox`)
+-  }
+-  paymentsToggle.parentElement.remove()
+-
+-  const syncDataTypes = root.querySelector('#sync-data-types')
+-  if (!syncDataTypes) {
+-    throw new Error(`[Settings] Sync controls: couldn't find #sync-data-types`)
+-  }
+-  syncDataTypes.insertAdjacentHTML(
+-    'beforeend',
+-    `\${this.isAiChatSyncEnabled_ ? html\`
+-      <div class="list-item"
+-          ?hidden="\${!this.syncPrefs?.aiChatRegistered}">
+-        <div id="aiChatCheckboxLabel">\${this.aiChatCheckboxLabel_}</div>
+-        <cr-policy-indicator indicator-type="userPolicy"
+-            ?hidden="\${!this.showPolicyIndicator_(
+-                this.syncPrefs?.aiChatManaged)}">
+-        </cr-policy-indicator>
+-        <cr-toggle .checked="\${!!this.syncPrefs?.aiChatSynced}"
+-            @change="\${this.onSingleSyncDataTypeChange_}"
+-            ?disabled="\${this.disableTypeCheckBox_(
+-                this.syncPrefs?.aiChatManaged)}"
+-            aria-labelledby="aiChatCheckboxLabel"
+-            data-type="\${UserSelectableType.AI_CHAT}"
+-            data-pref="aiChatSynced">
+-        </cr-toggle>
+-      </div>
+-    \` : ''}`)
+-})
+-- 
+2.55.0.windows.3
+

@@ -1,10 +1,10 @@
-From 5a58fafd0cba48d65da91d0d8a5dc85b03f3f58c Mon Sep 17 00:00:00 2001
+From e067fa18f347033d855021c5ff5b01bbd2c3bb52 Mon Sep 17 00:00:00 2001
 From: Loukious <24696530+Loukious@users.noreply.github.com>
 Date: Fri, 2 Oct 2026 15:22:39 +0100
 Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
 
 ---
- browser/brave_browser_main_parts.cc           | 21 -----
+ browser/brave_browser_main_parts.cc           | 11 +--
  browser/brave_content_browser_client.cc       |  5 +-
  browser/brave_prefs_browsertest.cc            |  2 +-
  ...browser_context_keyed_service_factories.cc |  2 -
@@ -61,7 +61,7 @@ Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
  .../sync/service/sync_auth_manager.cc.yaml    | 29 -------
  test/filters/components_unittests.filter      | 12 ---
  test/filters/unit_tests.filter                |  2 -
- 57 files changed, 28 insertions(+), 1094 deletions(-)
+ 57 files changed, 29 insertions(+), 1083 deletions(-)
  delete mode 100644 patches/chrome-browser-resources-settings-people_page-sync_controls.ts.patch
  delete mode 100644 patches/chrome-browser-signin-chrome_signin_helper.cc.patch
  delete mode 100644 patches/chrome-browser-signin-signin_promo_util.cc.patch
@@ -74,7 +74,7 @@ Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
  delete mode 100644 rewrite/components/sync/service/sync_auth_manager.cc.yaml
 
 diff --git a/browser/brave_browser_main_parts.cc b/browser/brave_browser_main_parts.cc
-index 4eaf52fa4..d585d9079 100644
+index 4eaf52fa4..7b54eae50 100644
 --- a/browser/brave_browser_main_parts.cc
 +++ b/browser/brave_browser_main_parts.cc
 @@ -15,7 +15,6 @@
@@ -120,25 +120,15 @@ index 4eaf52fa4..d585d9079 100644
        }
      }
    }
-@@ -179,18 +170,6 @@ void ChromeBrowserMainParts::PreShutdown() {
+@@ -179,7 +170,7 @@ void ChromeBrowserMainParts::PreShutdown() {
  
  void ChromeBrowserMainParts::PreProfileInit() {
    ChromeBrowserMainParts_ChromiumImpl::PreProfileInit();
 -#if !BUILDFLAG(IS_ANDROID)
--  auto* command_line = base::CommandLine::ForCurrentProcess();
--  if (!base::FeatureList::IsEnabled(brave_sync::features::kBraveSync)) {
--    // Disable sync temporarily
--    if (!command_line->HasSwitch(syncer::kDisableSync))
--      command_line->AppendSwitch(syncer::kDisableSync);
--  } else {
--    // Relaunch after flag changes will still have the switch
--    // when switching from disabled to enabled
--    command_line->RemoveSwitch(syncer::kDisableSync);
--  }
--#endif
- }
- 
- void ChromeBrowserMainParts::PostProfileInit(Profile* profile,
++#if 0
+   auto* command_line = base::CommandLine::ForCurrentProcess();
+   if (!base::FeatureList::IsEnabled(brave_sync::features::kBraveSync)) {
+     // Disable sync temporarily
 diff --git a/browser/brave_content_browser_client.cc b/browser/brave_content_browser_client.cc
 index 866e4b33c..d1170b2b1 100644
 --- a/browser/brave_content_browser_client.cc
@@ -1806,3 +1796,6 @@ index 185529299..075c7fb67 100644
  -SigninPromoTabHelperTest.*
  
  # This test crashes due to invalid memory access as described in the comment in
+-- 
+2.55.0.windows.3
+

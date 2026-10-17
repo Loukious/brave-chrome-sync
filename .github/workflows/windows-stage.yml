@@ -103,13 +103,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Checkpoint recovery is incompatible' }
       - name: Download previous checkpoint
         if: inputs.mode == 'compile'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: checkpoint-${{ inputs.previous_stage }}
-          path: checkpoint
-          github-token: ${{ github.token }}
-          run-id: ${{ inputs.checkpoint_run_id || github.run_id }}
-          digest-mismatch: error
+        timeout-minutes: 45
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_NAME: checkpoint-${{ inputs.previous_stage }}
+          CHECKPOINT_RUN_ID: ${{ inputs.checkpoint_run_id || github.run_id }}
+        run: |
+          python scripts/download_checkpoint.py --run-id $env:CHECKPOINT_RUN_ID --name $env:CHECKPOINT_NAME
+          if ($LASTEXITCODE -ne 0) { throw 'Checkpoint download failed' }
       - name: Prepare or continue compilation
         id: build
         shell: pwsh

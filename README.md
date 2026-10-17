@@ -82,6 +82,10 @@ incorrect archive-self file matches. Tar warnings, incomplete tar members, missi
 end markers, and gzip checksum errors fail the checkpoint before upload. A size
 and SHA256 manifest is checked before extraction. Vendored Cargo file checksums
 are validated before archiving and after restore.
+Checkpoint downloads resume at the last received byte after a network interruption,
+with a refreshed signed download URL and up to eight attempts within 45 minutes.
+The complete artifact SHA256 and ZIP checks pass before extraction; the existing
+tar/gzip and checkpoint manifest checks still run before restoring the build tree.
 
 Standard hosted runner compute is
 [free for public repositories](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).

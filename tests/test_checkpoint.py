@@ -12,10 +12,93 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, validate_archive
+from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, validate_archive, extract_archive
 
 
 class CheckpointTests(unittest.TestCase):
+    def test_unicode_restore_preserves_exact_names_timestamps_and_native_links(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            archive = base / "state.tar.gz"
+            names = ["ascii.txt", "caf\u00e9.txt", "\u4e2d\u6587.txt", "\U0001f428.txt", "e\u0301.txt"]
+            with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as stream:
+                # The target does not exist when this directory link is restored.
+                for name, target, kind in [("directory-link", "target", "dir"),
+                                           ("broken-directory-link", "missing", "dir")]:
+                    member = tarfile.TarInfo(name)
+                    member.type = tarfile.SYMTYPE
+                    member.linkname = target
+                    member.pax_headers = {"LIBARCHIVE.symlinktype": kind}
+                    stream.addfile(member)
+                directory = tarfile.TarInfo("target")
+                directory.type = tarfile.DIRTYPE
+                directory.pax_headers = {"mtime": "1700000000.1234567"}
+                stream.addfile(directory)
+                for index, name in enumerate(names):
+                    member = tarfile.TarInfo("target/" + name)
+                    member.size = 1
+                    member.pax_headers = {"mtime": "1700000000.1234567"}
+                    stream.addfile(member, io.BytesIO(bytes([index])))
+                for name, target, kind in [("hard-link", "target/\u4e2d\u6587.txt", tarfile.LNKTYPE),
+                                           ("file-link", "target/\u4e2d\u6587.txt", tarfile.SYMTYPE)]:
+                    member = tarfile.TarInfo(name)
+                    member.type = kind
+                    member.linkname = target
+                    member.pax_headers = {"LIBARCHIVE.symlinktype": "file", "mtime": "1700000000.1234567"}
+                    stream.addfile(member)
+            restored = base / "restored"
+            extract_archive(archive, restored)
+            self.assertEqual({p.name for p in (restored / "target").iterdir()}, set(names))
+            self.assertEqual((restored / "target").stat().st_mtime_ns, 1700000000123456700)
+            for index, name in enumerate(names):
+                self.assertEqual((restored / "target" / name).read_bytes(), bytes([index]))
+                self.assertEqual((restored / "target" / name).stat().st_mtime_ns, 1700000000123456700)
+            self.assertTrue(os.path.samefile(restored / "hard-link", restored / "target/\u4e2d\u6587.txt"))
+            self.assertTrue((restored / "directory-link").is_symlink())
+            self.assertTrue((restored / "directory-link").is_dir())
+            self.assertEqual((restored / "directory-link/\u4e2d\u6587.txt").read_bytes(), bytes([2]))
+            self.assertTrue((restored / "file-link").is_symlink())
+            self.assertEqual((restored / "file-link").read_bytes(), bytes([2]))
+            broken = restored / "broken-directory-link"
+            self.assertTrue(broken.is_symlink())
+            if os.name == "nt":
+                import stat
+                self.assertTrue(broken.lstat().st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY)
+
+    def test_restore_rejects_escaping_paths_links_and_existing_tree(self):
+        for name, kind, target in [("../escape", tarfile.REGTYPE, ""),
+                                   ("link", tarfile.SYMTYPE, "../escape"),
+                                   ("link", tarfile.LNKTYPE, "../escape"),
+                                   ("pipe", tarfile.FIFOTYPE, "")]:
+            with self.subTest(name=name, kind=kind), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                archive = base / "state.tar.gz"
+                with tarfile.open(archive, "w:gz") as stream:
+                    member = tarfile.TarInfo(name)
+                    member.type = kind
+                    member.linkname = target
+                    stream.addfile(member)
+                with self.assertRaises(tarfile.FilterError):
+                    extract_archive(archive, base / "restored")
+                self.assertFalse((base / "escape").exists())
+                with self.assertRaisesRegex(ValueError, "existing build tree"):
+                    extract_archive(archive, base / "restored")
+
+    def test_restore_does_not_replace_symlinks_with_copies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            archive = base / "state.tar.gz"
+            with tarfile.open(archive, "w:gz") as stream:
+                stream.addfile(tarfile.TarInfo("target"))
+                link = tarfile.TarInfo("link")
+                link.type = tarfile.SYMTYPE
+                link.linkname = "target"
+                stream.addfile(link)
+            with patch("checkpoint.os.symlink", side_effect=PermissionError("Denied")):
+                with self.assertRaises(PermissionError):
+                    extract_archive(archive, base / "restored")
+            self.assertFalse((base / "restored/link").exists())
+
     def archive(self, folder):
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w") as stream:
@@ -76,7 +159,7 @@ class CheckpointTests(unittest.TestCase):
             archive, data = self.archive(checkpoint)
             archive.write_bytes(gzip.compress(data[:1024]))
             root = Path(temporary) / "build"
-            with patch("stage.run") as extract:
+            with patch("stage.extract_archive") as extract:
                 with self.assertRaisesRegex(ValueError, "Invalid checkpoint"):
                     restore(root, checkpoint, allow_legacy=True)
                 extract.assert_not_called()
@@ -147,19 +230,27 @@ class CheckpointTests(unittest.TestCase):
             (source / "binary.dat").write_bytes(binary)
             (source / ".hidden").write_bytes(b"hidden\n")
             os.link(crate / "LICENSE-MIT", source / "LICENSE-copy")
+            os.symlink("third_party/wasm/vendor/serde_core", source / "directory-link", target_is_directory=True)
+            os.symlink("third_party/wasm/vendor/serde_core/LICENSE-MIT", source / "file-link")
             timestamp = 1700000000123456700
             os.utime(crate / "LICENSE-MIT", ns=(timestamp, timestamp))
             create_archive(source, base / "checkpoint/state.tar.gz")
-            self.assertEqual(verify_checkpoint(base / "checkpoint/state.tar.gz"), 12)
+            self.assertEqual(verify_checkpoint(base / "checkpoint/state.tar.gz"), 14)
             with tarfile.open(base / "checkpoint/state.tar.gz", "r:gz") as stream:
                 self.assertIn("./third_party/wasm/vendor/serde_core/LICENSE-MIT", stream.getnames())
+                self.assertEqual(stream.getmember("./directory-link").pax_headers["LIBARCHIVE.symlinktype"], "dir")
             restored = base / "restored"
-            restored.mkdir()
-            subprocess.run(["tar.exe", "-xzf", str(base / "checkpoint/state.tar.gz"), "-C", str(restored)], check=True)
+            extract_archive(base / "checkpoint/state.tar.gz", restored)
             self.assertEqual(verify_wasm_vendor(restored), 2)
             self.assertEqual((restored / "binary.dat").read_bytes(), binary)
             self.assertEqual((restored / ".hidden").read_bytes(), b"hidden\n")
             self.assertEqual((restored / "LICENSE-copy").read_bytes(), b"license\n")
+            self.assertTrue(os.path.samefile(restored / "LICENSE-copy", restored / "third_party/wasm/vendor/serde_core/LICENSE-MIT"))
+            self.assertTrue((restored / "directory-link").is_symlink())
+            self.assertTrue((restored / "directory-link").is_dir())
+            self.assertTrue((restored / "file-link").is_symlink())
+            self.assertEqual((restored / "directory-link/LICENSE-MIT").read_bytes(), b"license\n")
+            self.assertEqual((restored / "file-link").read_bytes(), b"license\n")
             self.assertEqual((restored / "third_party/wasm/vendor/serde_core/LICENSE-MIT").stat().st_mtime_ns, timestamp)
 
 

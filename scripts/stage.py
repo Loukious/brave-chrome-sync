@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from prepare import run
 from upstream import ROOT, digest
 from package_windows import package_browser, google_configuration
-from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint
+from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, extract_archive
 from resume_checkpoint import check_marker, apply_checkpoint_patches
 from extension_services import check_build_key, check_service
 from windows_build_process import run_build
@@ -65,8 +65,7 @@ def restore(root, checkpoint, allow_legacy=False):
     if root.exists():
         raise ValueError(f"Refusing to restore over existing build tree: {root}")
     verify_checkpoint(checkpoint / "state.tar.gz", allow_legacy=allow_legacy)
-    root.mkdir(parents=True)
-    run("tar.exe", "-xzf", checkpoint / "state.tar.gz", "-C", root)
+    extract_archive(checkpoint / "state.tar.gz", root)
     verify_wasm_vendor(root / "src/brave")
     # The downloaded checkpoint is disposable input inside this repository's
     # CI workspace; it is not a compiler cache or build output directory.

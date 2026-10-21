@@ -22,14 +22,18 @@ service key is supplied through an Actions secret and compiled into the browser.
 
 ## Automated builds
 
-Every day at 04:23 UTC, GitHub Actions finds the newest published version on
-the configured Brave source channel. The source default is **Nightly**, matching
+Every day at 04:23 UTC, a small scheduler checks for an active or queued browser
+build, including checkpoint recovery on another branch. If one exists, it exits
+without queuing another build. Otherwise it starts a build that finds the newest
+published version on the configured Brave source channel. The source default is **Nightly**, matching
 the patch base. Our browser ships as **Release**, with orange release branding,
 the full version number, `is_official_build=true`, and non-component binaries.
 Source selection follows Brave Nightly, independently of our release branding.
-Updates of the patch/build scripts also trigger a build. You can select
-a specific published upstream tag with **Actions → Sync Brave, build Windows
-x64, release → Run workflow**.
+Pushes and merges run validation checks without starting or queuing a browser
+build. Changes are included in the next daily build, or an explicitly requested
+manual build. You can select a specific published upstream tag with **Actions →
+Sync Brave, build Windows x64, release → Run workflow**. Manual build requests
+remain serialized behind an existing build and never cancel its progress.
 
 The workflow:
 

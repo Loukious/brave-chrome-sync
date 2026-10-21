@@ -86,6 +86,9 @@ Checkpoint downloads resume at the last received byte after a network interrupti
 with a refreshed signed download URL and up to eight attempts within 45 minutes.
 The complete artifact SHA256 and ZIP checks pass before extraction; the existing
 tar/gzip and checkpoint manifest checks still run before restoring the build tree.
+Restore uses Python's Unicode filesystem APIs instead of Windows tar's filename
+conversion, preserving exact PAX modification times and native file/directory
+links. Paths and link targets outside the restore tree are rejected.
 
 Standard hosted runner compute is
 [free for public repositories](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).

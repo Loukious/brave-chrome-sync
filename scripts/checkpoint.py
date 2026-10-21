@@ -2,9 +2,48 @@
 import hashlib
 import gzip
 import json
+import os
+from decimal import Decimal
 from pathlib import Path
 import subprocess
 import tarfile
+
+
+class CheckpointTar(tarfile.TarFile):
+    """Use Windows Unicode APIs without losing PAX timestamps or link types."""
+
+    def utime(self, member, targetpath):
+        if member.mtime is not None:
+            # TarInfo.mtime is a float; its original PAX text retains all digits.
+            timestamp = int(Decimal(member.pax_headers.get("mtime", str(member.mtime))) * 10**9)
+            os.utime(targetpath, ns=(timestamp, timestamp))
+
+    def makelink(self, member, targetpath):
+        # Python versions before the extraction-filter security update call this.
+        self.makelink_with_filter(member, targetpath, None, None)
+
+    def makelink_with_filter(self, member, targetpath, filter_function, extraction_root):
+        if member.issym():
+            link_type = member.pax_headers.get("LIBARCHIVE.symlinktype")
+            if link_type not in (None, "file", "dir"):
+                raise ValueError(f"Invalid checkpoint symlink type: {member.name}")
+            directory = (link_type == "dir" if link_type else
+                         (Path(targetpath).parent / member.linkname).is_dir())
+            # Never fall back to copying a link target: pnpm needs real links.
+            os.symlink(member.linkname, targetpath, target_is_directory=directory)
+        else:
+            os.link(member._link_target, targetpath)
+
+
+def extract_archive(archive, root):
+    if root.exists():
+        raise ValueError(f"Refusing to restore over existing build tree: {root}")
+    root.mkdir(parents=True)
+    # Streaming avoids retaining 1.6 million headers in memory. The data filter
+    # rejects paths/links outside the restore tree and unsupported special files.
+    with CheckpointTar.open(archive, "r|gz", stream=True, errorlevel=2) as stream:
+        stream.extractall(root, filter="data")
+    print("Restored checkpoint with Unicode names, PAX timestamps and native links", flush=True)
 
 
 def validate_archive(archive):

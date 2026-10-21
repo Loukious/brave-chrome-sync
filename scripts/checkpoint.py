@@ -3,10 +3,43 @@ import hashlib
 import gzip
 import json
 import os
+import re
 from decimal import Decimal
 from pathlib import Path
 import subprocess
 import tarfile
+import tempfile
+
+
+def canonical_path(path):
+    name = os.path.realpath(path)
+    if os.name == "nt":
+        if name.startswith("\\\\?\\UNC\\"):
+            name = "\\\\" + name[8:]
+        elif name.startswith("\\\\?\\"):
+            name = name[4:]
+    return Path(name)
+
+
+def checkpoint_filter(member, destination):
+    if (member.issym() or member.islnk()) and os.path.isabs(member.linkname):
+        root = canonical_path(destination)
+        target = canonical_path(member.linkname)
+        if target.is_relative_to(root):
+            base = (root / member.name).parent if member.issym() else root
+            member = member.replace(linkname=os.path.relpath(target, base), deep=False)
+        elif member.issym() and member.pax_headers.get("LIBARCHIVE.symlinktype") != "dir":
+            alias = re.fullmatch(r"(?:\./)?src/out/Sync/siso\.exe(?:\.\d+)?\.(INFO|WARNING|ERROR|FATAL)", member.name)
+            temporary = [tempfile.gettempdir(), *[os.environ.get(key) for key in ("TEMP", "TMP", "RUNNER_TEMP")]]
+            if os.name == "nt":
+                temporary.append(str(Path.home() / "AppData/Local/Temp"))
+            if (alias and not target.is_dir()
+                    and re.fullmatch(r"siso\.exe\..+\.log\." + alias[1] + r"\.\d{8}-\d{6}\.\d+", target.name)
+                    and any(target.parent == canonical_path(folder) for folder in temporary if folder)):
+                # Siso recreates these file aliases on its next invocation. Keep
+                # the pointer only; never read or extract its external log target.
+                return tarfile.tar_filter(member, destination)
+    return tarfile.data_filter(member, destination)
 
 
 class CheckpointTar(tarfile.TarFile):
@@ -39,14 +72,14 @@ def extract_archive(archive, root):
     if root.exists():
         raise ValueError(f"Refusing to restore over existing build tree: {root}")
     root.mkdir(parents=True)
-    # Streaming avoids retaining 1.6 million headers in memory. The data filter
-    # rejects paths/links outside the restore tree and unsupported special files.
+    # Streaming avoids retaining 1.6 million headers in memory. Only Siso's
+    # temporary log-file aliases may point outside the restore tree.
     with CheckpointTar.open(archive, "r|gz", stream=True, errorlevel=2) as stream:
-        stream.extractall(root, filter="data")
+        stream.extractall(root, filter=checkpoint_filter)
     print("Restored checkpoint with Unicode names, PAX timestamps and native links", flush=True)
 
 
-def validate_archive(archive):
+def validate_archive(archive, *, restore_root=None):
     """Read every tar member and gzip trailer, including data after tar EOF."""
     class Reader:
         def __init__(self, stream):
@@ -68,6 +101,8 @@ def validate_archive(archive):
                 data_end = 0
                 for member in stream:
                     count += 1
+                    if restore_root is not None and (member.issym() or member.islnk()):
+                        checkpoint_filter(member, restore_root)
                     data_end = max(data_end, member.offset_data + ((member.size + 511) // 512) * 512)
             while reader.read(1024 * 1024):
                 pass
@@ -80,13 +115,13 @@ def validate_archive(archive):
     return count
 
 
-def verify_checkpoint(archive, allow_legacy=False):
+def verify_checkpoint(archive, allow_legacy=False, *, restore_root=None):
     manifest = archive.with_name("state-manifest.json")
     if not manifest.exists():
         if not allow_legacy:
             raise ValueError("Checkpoint integrity manifest is missing")
         print("Legacy recovery: validating the entire archive before extraction", flush=True)
-        return validate_archive(archive)
+        return validate_archive(archive, restore_root=restore_root)
     expected = json.loads(manifest.read_text(encoding="utf-8"))
     if expected.get("format") != 1 or archive.stat().st_size != expected.get("bytes"):
         raise ValueError("Checkpoint size/format mismatch; download is incomplete")
@@ -94,7 +129,7 @@ def verify_checkpoint(archive, allow_legacy=False):
         actual = hashlib.file_digest(stream, "sha256").hexdigest()
     if actual != expected.get("sha256"):
         raise ValueError("Checkpoint SHA256 mismatch; refusing extraction")
-    count = validate_archive(archive)
+    count = validate_archive(archive, restore_root=restore_root)
     if count != expected.get("members"):
         raise ValueError("Checkpoint member count mismatch")
     return count

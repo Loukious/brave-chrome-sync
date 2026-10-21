@@ -16,6 +16,111 @@ from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, va
 
 
 class CheckpointTests(unittest.TestCase):
+    def test_absolute_internal_file_directory_and_hard_links_restore(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "restored"
+            archive = base / "state.tar.gz"
+            with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as stream:
+                directory = tarfile.TarInfo("target")
+                directory.type = tarfile.DIRTYPE
+                stream.addfile(directory)
+                stream.addfile(tarfile.TarInfo("target/file"))
+                for name, target, kind, link_type in [
+                        ("file-link", "target/file", tarfile.SYMTYPE, "file"),
+                        ("directory-link", "target", tarfile.SYMTYPE, "dir"),
+                        ("hard-link", "target/file", tarfile.LNKTYPE, "file")]:
+                    member = tarfile.TarInfo(name)
+                    member.type = kind
+                    member.linkname = str(root / target)
+                    member.pax_headers = {"LIBARCHIVE.symlinktype": link_type}
+                    stream.addfile(member)
+            verify_checkpoint(archive, allow_legacy=True, restore_root=root)
+            extract_archive(archive, root)
+            for name in ["file-link", "directory-link", "hard-link"]:
+                target = root / ("target" if name == "directory-link" else "target/file")
+                self.assertTrue(os.path.samefile(root / name, target))
+            self.assertFalse(os.path.isabs(os.readlink(root / "file-link")))
+
+    def test_siso_temporary_log_aliases_survive_even_with_missing_targets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "restored"
+            archive = base / "state.tar.gz"
+            logs = base / "logs"
+            logs.mkdir()
+            target = logs / "siso.exe.runner.host.log.INFO.20261021-010000.1234"
+            with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as stream:
+                for alias in ["siso.exe.INFO", "siso.exe.0.INFO", "siso.exe.9.INFO"]:
+                    member = tarfile.TarInfo("./src/out/Sync/" + alias)
+                    member.type = tarfile.SYMTYPE
+                    member.linkname = str(target)
+                    member.pax_headers = {"LIBARCHIVE.symlinktype": "file"}
+                    stream.addfile(member)
+            with patch("checkpoint.tempfile.gettempdir", return_value=str(logs)):
+                verify_checkpoint(archive, allow_legacy=True, restore_root=root)
+                extract_archive(archive, root)
+            for alias in (root / "src/out/Sync").iterdir():
+                self.assertTrue(alias.is_symlink())
+                self.assertTrue(os.readlink(alias).endswith(str(target)))
+            self.assertFalse(target.exists())
+
+    def test_other_external_links_are_rejected_during_verification(self):
+        from stage import restore
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            logs = base / "logs"
+            logs.mkdir()
+            valid_target = logs / "siso.exe.runner.host.log.INFO.20261021-010000.1234"
+            cases = [
+                ("src/out/Sync/other", valid_target, "file"),
+                ("src/out/Sync/siso.exe.INFO", logs / "unrelated.txt", "file"),
+                ("src/out/Sync/siso.exe.WARNING", valid_target, "file"),
+                ("src/out/Sync/siso.exe.INFO", valid_target, "dir"),
+                ("src/out/Sync/siso.exe.INFO", base / valid_target.name, "file"),
+                ("src/out/Sync/siso.exe.INFO", logs / "siso.exe.fake.log.INFO.not-a-date", "file"),
+            ]
+            for index, (name, target, link_type) in enumerate(cases):
+                with self.subTest(name=name, target=target, kind=link_type):
+                    checkpoint = base / f"checkpoint{index}"
+                    checkpoint.mkdir()
+                    archive = checkpoint / "state.tar.gz"
+                    with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as stream:
+                        member = tarfile.TarInfo(name)
+                        member.type = tarfile.SYMTYPE
+                        member.linkname = str(target)
+                        member.pax_headers = {"LIBARCHIVE.symlinktype": link_type}
+                        stream.addfile(member)
+                    root = base / f"restore{index}"
+                    with patch("checkpoint.tempfile.gettempdir", return_value=str(logs)), \
+                         patch("stage.extract_archive") as extract:
+                        with self.assertRaises(ValueError):
+                            restore(root, checkpoint, allow_legacy=True)
+                        extract.assert_not_called()
+                        self.assertFalse(root.exists())
+
+    @unittest.skipUnless(os.name == "nt", "Uses the Windows tar executable")
+    def test_native_siso_style_absolute_log_links_round_trip(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "source"
+            logs = base / "logs"
+            logs.mkdir()
+            target = logs / "siso.exe.runner.host.log.INFO.20261021-010000.1234"
+            target.write_bytes(b"synthetic log")
+            output = source / "src/out/Sync"
+            output.mkdir(parents=True)
+            os.symlink(target, output / "siso.exe.0.INFO")
+            os.symlink(target, output / "siso.exe.INFO")
+            archive = base / "checkpoint/state.tar.gz"
+            create_archive(source, archive)
+            root = base / "restored"
+            with patch("checkpoint.tempfile.gettempdir", return_value=str(logs)):
+                verify_checkpoint(archive, restore_root=root)
+                extract_archive(archive, root)
+            self.assertTrue(os.path.samefile(root / "src/out/Sync/siso.exe.0.INFO", target))
+            self.assertTrue(os.path.samefile(root / "src/out/Sync/siso.exe.INFO", target))
+
     def test_unicode_restore_preserves_exact_names_timestamps_and_native_links(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

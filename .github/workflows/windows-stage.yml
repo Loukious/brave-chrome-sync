@@ -69,6 +69,11 @@ jobs:
     outputs:
       finished: ${{ steps.build.outputs.finished }}
     steps:
+      - name: Record the build job deadline
+        shell: pwsh
+        run: |
+          $buildDeadline = [DateTimeOffset]::UtcNow.AddMinutes(350).ToString('o')
+          "BUILD_JOB_DEADLINE=$buildDeadline" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
@@ -103,7 +108,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Checkpoint recovery is incompatible' }
       - name: Download previous checkpoint
         if: inputs.mode == 'compile'
-        timeout-minutes: 45
+        timeout-minutes: 120
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

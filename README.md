@@ -92,7 +92,11 @@ The complete artifact SHA256 and ZIP checks pass before extraction; the existing
 tar/gzip and checkpoint manifest checks still run before restoring the build tree.
 Restore uses Python's Unicode filesystem APIs instead of Windows tar's filename
 conversion, preserving exact PAX modification times and native file/directory
-links. Paths and link targets outside the restore tree are rejected.
+links. Absolute links within the restore tree are converted to equivalent relative
+links. Siso's named log-file aliases into the runner's temporary directory are
+preserved as pointers; their external log files are never read or extracted.
+Other paths and link targets outside the restore tree are rejected. Link headers
+are checked during checkpoint verification before any build files are extracted.
 Each Windows job records its deadline before toolchain setup or download.
 Compilation uses up to 210 minutes of the remaining time, reserving one hour for
 checkpoint creation or packaging and upload, plus a ten-minute margin before

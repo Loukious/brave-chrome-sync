@@ -80,7 +80,7 @@ def snapshot(root, checkpoint):
 def restore(root, checkpoint, allow_legacy=False):
     if root.exists():
         raise ValueError(f"Refusing to restore over existing build tree: {root}")
-    verify_checkpoint(checkpoint / "state.tar.gz", allow_legacy=allow_legacy)
+    verify_checkpoint(checkpoint / "state.tar.gz", allow_legacy=allow_legacy, restore_root=root)
     extract_archive(checkpoint / "state.tar.gz", root)
     verify_wasm_vendor(root / "src/brave")
     # The downloaded checkpoint is disposable input inside this repository's

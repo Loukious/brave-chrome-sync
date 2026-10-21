@@ -87,12 +87,17 @@ end markers, and gzip checksum errors fail the checkpoint before upload. A size
 and SHA256 manifest is checked before extraction. Vendored Cargo file checksums
 are validated before archiving and after restore.
 Checkpoint downloads resume at the last received byte after a network interruption,
-with a refreshed signed download URL and up to eight attempts within 45 minutes.
+with a refreshed signed download URL and up to eight attempts within 120 minutes.
 The complete artifact SHA256 and ZIP checks pass before extraction; the existing
 tar/gzip and checkpoint manifest checks still run before restoring the build tree.
 Restore uses Python's Unicode filesystem APIs instead of Windows tar's filename
 conversion, preserving exact PAX modification times and native file/directory
 links. Paths and link targets outside the restore tree are rejected.
+Each Windows job records its deadline before toolchain setup or download.
+Compilation uses up to 210 minutes of the remaining time, reserving one hour for
+checkpoint creation or packaging and upload, plus a ten-minute margin before
+GitHub's six-hour job limit. A slow transfer therefore reduces that job's compile
+time instead of consuming the time needed to save progress.
 
 Standard hosted runner compute is
 [free for public repositories](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).

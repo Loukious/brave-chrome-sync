@@ -28,6 +28,8 @@ def timed_run(command, cwd, seconds):
 
 def compile_checked(command, root, seconds, patch_digest):
     """Type-check Settings before spending the stage on the complete browser."""
+    if seconds <= 0:
+        return 124
     deadline = time.monotonic() + seconds
     marker = root / "settings-typecheck.json"
     target = "chrome/browser/resources/settings:build_ts"
@@ -44,6 +46,20 @@ def compile_checked(command, root, seconds, patch_digest):
     if remaining <= 0:
         return 124
     return timed_run(command, root / "src/brave", remaining)
+
+
+def compile_budget(maximum_seconds, deadline="", now=None):
+    """Reserve one hour for checkpoint/package/upload within the CI job deadline."""
+    if not deadline:
+        return maximum_seconds
+    end = datetime.fromisoformat(deadline)
+    if end.tzinfo is None:
+        raise ValueError("Build job deadline must include a time zone")
+    remaining = int((end - (now or datetime.now(timezone.utc))).total_seconds())
+    seconds = max(0, min(maximum_seconds, remaining - 60 * 60))
+    print(f"Job time remaining: {remaining // 60} min; compilation budget: {seconds // 60} min; "
+          "reserved for checkpoint/package/upload: 60 min", flush=True)
+    return seconds
 
 
 def output(key, value):
@@ -243,7 +259,8 @@ def main():
     # Brave only forwards its --ninja=j value into SISO_LIMITS for remoteexec
     # builds. Set the local limit explicitly for this offline compilation.
     os.environ["SISO_LIMITS"] = f"local={config['compile_jobs']}"
-    result = compile_checked(command, root, config["compile_minutes"] * 60, marker["patch_digest"])
+    seconds = compile_budget(config["compile_minutes"] * 60, os.environ.get("BUILD_JOB_DEADLINE", ""))
+    result = compile_checked(command, root, seconds, marker["patch_digest"])
     if result == 124:
         output_dir = root / "src/out/Sync"
         if (output_dir / "gn_gen.guard").exists() or not (output_dir / "build.ninja").exists():

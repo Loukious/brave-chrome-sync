@@ -49,16 +49,16 @@ def compile_checked(command, root, seconds, patch_digest):
 
 
 def compile_budget(maximum_seconds, deadline="", now=None):
-    """Reserve one hour for checkpoint/package/upload within the CI job deadline."""
+    """Reserve 90 minutes for checkpoint/package/upload within the CI deadline."""
     if not deadline:
         return maximum_seconds
     end = datetime.fromisoformat(deadline)
     if end.tzinfo is None:
         raise ValueError("Build job deadline must include a time zone")
     remaining = int((end - (now or datetime.now(timezone.utc))).total_seconds())
-    seconds = max(0, min(maximum_seconds, remaining - 60 * 60))
+    seconds = max(0, min(maximum_seconds, remaining - 90 * 60))
     print(f"Job time remaining: {remaining // 60} min; compilation budget: {seconds // 60} min; "
-          "reserved for checkpoint/package/upload: 60 min", flush=True)
+          "reserved for checkpoint/package/upload: 90 min", flush=True)
     return seconds
 
 

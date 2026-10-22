@@ -8,11 +8,12 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, validate_archive, extract_archive
+from checkpoint import CheckpointWriter, create_archive, verify_wasm_vendor, verify_checkpoint, validate_archive, extract_archive
 
 
 class CheckpointTests(unittest.TestCase):
@@ -113,10 +114,13 @@ class CheckpointTests(unittest.TestCase):
             os.symlink(target, output / "siso.exe.0.INFO")
             os.symlink(target, output / "siso.exe.INFO")
             archive = base / "checkpoint/state.tar.gz"
-            create_archive(source, archive)
+            archive.parent.mkdir()
+            with archive.open("wb") as output_archive:
+                subprocess.run(["tar.exe", "-czf", "-", "--format=pax", "-C", str(source), "."],
+                               stdout=output_archive, stderr=subprocess.PIPE, check=True)
             root = base / "restored"
             with patch("checkpoint.tempfile.gettempdir", return_value=str(logs)):
-                verify_checkpoint(archive, restore_root=root)
+                verify_checkpoint(archive, allow_legacy=True, restore_root=root)
                 extract_archive(archive, root)
             self.assertTrue(os.path.samefile(root / "src/out/Sync/siso.exe.0.INFO", target))
             self.assertTrue(os.path.samefile(root / "src/out/Sync/siso.exe.INFO", target))
@@ -300,24 +304,83 @@ class CheckpointTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing.*manifests"):
                 verify_wasm_vendor(Path(temporary))
 
-    def test_tar_warning_is_fatal_even_with_zero_exit(self):
+    def test_writer_failure_does_not_publish_an_integrity_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "input"
             root.mkdir()
             archive = Path(temporary) / "checkpoint/state.tar.gz"
 
-            def fake_tar(command, **options):
-                self.assertEqual(command[2], "-")
-                self.assertEqual(options["stdout"], subprocess.PIPE)
-                options["stderr"].write(b"tar.exe: LICENSE-MIT: Can't add archive to itself\n")
-                process = unittest.mock.Mock()
-                process.stdout = io.BytesIO(b"partial archive")
-                process.wait.return_value = 0
-                return process
-
-            with patch("checkpoint.subprocess.Popen", side_effect=fake_tar):
-                with self.assertRaisesRegex(RuntimeError, "not lossless.*archive to itself"):
+            with patch("checkpoint.CheckpointWriter.addfile", side_effect=OSError("write failed")):
+                with self.assertRaisesRegex(OSError, "write failed"):
                     create_archive(root, archive)
+            self.assertFalse(archive.with_name("state-manifest.json").exists())
+
+    def test_writer_detects_inputs_changed_during_copy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "input"
+            source.write_bytes(b"original")
+            with CheckpointWriter.open(fileobj=io.BytesIO(), mode="w", format=tarfile.PAX_FORMAT) as writer:
+                member = writer.gettarinfo(source, "input")
+                with source.open("rb") as content:
+                    before = os.fstat(content.fileno())
+                    changed = SimpleNamespace(st_size=before.st_size, st_mtime_ns=before.st_mtime_ns + 100)
+                    with patch("checkpoint.os.fstat", side_effect=[before, changed]):
+                        with self.assertRaisesRegex(RuntimeError, "changed while reading"):
+                            writer.addfile(member, content)
+
+    def test_writer_round_trip_preserves_unicode_and_keeps_header_cache_bounded(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "source"
+            source.mkdir()
+            names = ["\u4e2d\u6587.txt", "\U0001f428.txt", "e\u0301.txt", "caf\u00e9.txt"]
+            for name in names:
+                (source / name).write_bytes(name.encode("utf-8"))
+                os.utime(source / name, ns=(1700000000123456700, 1700000000123456700))
+            buffer = io.BytesIO()
+            with CheckpointWriter.open(fileobj=buffer, mode="w|", format=tarfile.PAX_FORMAT) as writer:
+                writer.add(source, arcname=".")
+                self.assertEqual(writer.members, [])
+                self.assertEqual(writer.inodes, {})
+            archive = base / "checkpoint/state.tar.gz"
+            create_archive(source, archive)
+            verify_checkpoint(archive)
+            root = base / "restored"
+            extract_archive(archive, root)
+            self.assertEqual({p.name for p in root.iterdir()}, set(names))
+            for name in names:
+                self.assertEqual((root / name).read_bytes(), name.encode("utf-8"))
+                self.assertEqual((root / name).stat().st_mtime_ns, 1700000000123456700)
+
+    @unittest.skipUnless(os.name == "nt", "Uses native Windows junctions")
+    def test_writer_preserves_junction_as_directory_link(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "source"
+            target = source / "target"
+            target.mkdir(parents=True)
+            (target / "file").write_bytes(b"fixture")
+            # Native mklink creates only this test junction; no deletion or move.
+            subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J", str(source / "junction"), str(target)],
+                           capture_output=True, check=True)
+            os.symlink("missing", source / "broken-directory-link", target_is_directory=True)
+            archive = base / "checkpoint/state.tar.gz"
+            create_archive(source, archive)
+            with tarfile.open(archive, "r:gz") as stream:
+                member = stream.getmember("./junction")
+                self.assertTrue(member.issym())
+                self.assertEqual(member.pax_headers["LIBARCHIVE.symlinktype"], "dir")
+                self.assertNotIn("./junction/file", stream.getnames())
+            root = base / "restored"
+            verify_checkpoint(archive, restore_root=root)
+            extract_archive(archive, root)
+            self.assertTrue((root / "junction").is_symlink())
+            self.assertTrue((root / "junction").is_dir())
+            self.assertEqual((root / "junction/file").read_bytes(), b"fixture")
+            broken = root / "broken-directory-link"
+            self.assertTrue(broken.is_symlink())
+            import stat
+            self.assertTrue(broken.lstat().st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY)
 
     def test_output_inside_source_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -325,8 +388,7 @@ class CheckpointTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "outside"):
                 create_archive(root, root / "state.tar.gz")
 
-    @unittest.skipUnless(os.name == "nt", "Uses the Windows tar executable")
-    def test_windows_binary_archive_round_trip_preserves_sources_and_links(self):
+    def test_binary_archive_round_trip_preserves_sources_and_links(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
             source = base / "source"

@@ -81,9 +81,11 @@ source timestamps and pnpm symlinks, so later jobs can continue the build.
 Checkpoints use PAX format to preserve subsecond timestamps; Windows tar's
 default format rounds them to whole seconds. Each compilation stage also uploads
 Siso's rebuild explanations and metrics as a small diagnostic artifact.
-Checkpoint creation streams through a binary pipe to avoid Windows tar's
-incorrect archive-self file matches. Tar warnings, incomplete tar members, missing
-end markers, and gzip checksum errors fail the checkpoint before upload. A size
+Checkpoint creation streams Unicode PAX headers through Python with gzip level 1,
+preserving exact timestamps, hard links and native directory links/junctions.
+It avoids Windows tar's Unicode crashes and archive-self file matches. Changed
+inputs, write failures, incomplete tar members, missing end markers, and gzip
+checksum errors fail the checkpoint before upload. A size
 and SHA256 manifest is checked before extraction. Vendored Cargo file checksums
 are validated before archiving and after restore.
 Checkpoint downloads resume at the last received byte after a network interruption,
@@ -98,7 +100,7 @@ preserved as pointers; their external log files are never read or extracted.
 Other paths and link targets outside the restore tree are rejected. Link headers
 are checked during checkpoint verification before any build files are extracted.
 Each Windows job records its deadline before toolchain setup or download.
-Compilation uses up to 210 minutes of the remaining time, reserving one hour for
+Compilation uses up to 210 minutes of the remaining time, reserving 90 minutes for
 checkpoint creation or packaging and upload, plus a ten-minute margin before
 GitHub's six-hour job limit. A slow transfer therefore reduces that job's compile
 time instead of consuming the time needed to save progress.

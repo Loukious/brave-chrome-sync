@@ -4,11 +4,52 @@ import gzip
 import json
 import os
 import re
+import stat
 from decimal import Decimal
 from pathlib import Path
-import subprocess
 import tarfile
 import tempfile
+
+
+class CheckpointWriter(tarfile.TarFile):
+    """Write Unicode PAX headers with exact times and native directory links."""
+
+    def gettarinfo(self, name=None, arcname=None, fileobj=None):
+        member = super().gettarinfo(name, arcname, fileobj)
+        details = os.fstat(fileobj.fileno()) if fileobj else os.lstat(name)
+        if member is None:
+            raise ValueError(f"Unsupported checkpoint input: {name}")
+        if os.name == "nt" and details.st_reparse_tag == stat.IO_REPARSE_TAG_MOUNT_POINT:
+            # pnpm junctions must remain directory links, not expanded trees.
+            member.type, member.size, member.linkname = tarfile.SYMTYPE, 0, os.readlink(name)
+        if not (member.isreg() or member.isdir() or member.issym() or member.islnk()):
+            raise ValueError(f"Unsupported checkpoint input: {name}")
+        member.pax_headers["mtime"] = str(Decimal(details.st_mtime_ns) / 10**9)
+        if member.issym():
+            directory = (bool(details.st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY)
+                         if os.name == "nt" else os.path.isdir(name))
+            member.pax_headers["LIBARCHIVE.symlinktype"] = "dir" if directory else "file"
+            if os.path.isabs(member.linkname) and getattr(self, "checkpoint_root", None):
+                target = canonical_path(member.linkname)
+                if target.is_relative_to(self.checkpoint_root):
+                    member.linkname = os.path.relpath(target, canonical_path(Path(name).parent))
+        if member.isreg() and details.st_nlink <= 1:
+            self.inodes.pop((details.st_ino, details.st_dev), None)
+        return member
+
+    def addfile(self, member, fileobj=None):
+        before = os.fstat(fileobj.fileno()) if fileobj else None
+        if before and (before.st_size != member.size or
+                       before.st_mtime_ns != int(Decimal(member.pax_headers["mtime"]) * 10**9)):
+            raise RuntimeError(f"Checkpoint input changed before reading: {member.name}")
+        super().addfile(member, fileobj)
+        if before:
+            after = os.fstat(fileobj.fileno())
+            if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+                raise RuntimeError(f"Checkpoint input changed while reading: {member.name}")
+        # tarfile retains every output header by default. Only its hard-link
+        # inode map is needed while writing a multi-million-member checkpoint.
+        self.members.clear()
 
 
 def canonical_path(path):
@@ -96,7 +137,7 @@ def validate_archive(archive, *, restore_root=None):
     try:
         with gzip.open(archive, "rb") as compressed:
             reader = Reader(compressed)
-            with tarfile.open(fileobj=reader, mode="r|") as stream:
+            with tarfile.open(fileobj=reader, mode="r|", stream=True) as stream:
                 count = 0
                 data_end = 0
                 for member in stream:
@@ -164,28 +205,26 @@ def create_archive(root, archive):
     if archive.is_relative_to(root):
         raise ValueError("Checkpoint output must be outside the archived tree")
     archive.parent.mkdir(parents=True, exist_ok=True)
-    # Windows tar defaults to restricted pax, which drops fractional mtimes.
-    command = ["tar.exe", "-czf", "-", "--format=pax", "--options", "gzip:compression-level=1", "-C", str(root), "."]
-    print("+", " ".join(command), flush=True)
-    diagnostics = archive.with_name("snapshot-stderr.log")
-    # A pipe avoids Windows tar's false archive-self match against a source
-    # file's ID. Python writes the binary stream without shell/text conversion.
+    print("Creating Unicode PAX checkpoint with gzip compression level 1", flush=True)
     checksum = hashlib.sha256()
-    with archive.open("xb") as output, diagnostics.open("wb") as errors:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors)
-        try:
-            with process.stdout:
-                while chunk := process.stdout.read(1024 * 1024):
-                    output.write(chunk)
-                    checksum.update(chunk)
-            result = process.wait()
-        except BaseException:
-            process.kill()
-            process.wait()
-            raise
-    warnings = diagnostics.read_text(encoding="utf-8", errors="replace").strip()
-    if result != 0 or warnings:
-        raise RuntimeError(f"Checkpoint creation was not lossless (exit {result}): {warnings}")
+
+    class HashedOutput:
+        def write(self, data):
+            written = output.write(data)
+            if written != len(data):
+                raise OSError("Incomplete checkpoint write")
+            checksum.update(data)
+            return written
+
+        def flush(self):
+            output.flush()
+
+    with archive.open("xb") as output:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=HashedOutput(), compresslevel=1, mtime=0) as compressed:
+            with CheckpointWriter.open(fileobj=compressed, mode="w|", format=tarfile.PAX_FORMAT,
+                                       dereference=False, copybufsize=1024 * 1024) as stream:
+                stream.checkpoint_root = canonical_path(root)
+                stream.add(root, arcname=".")
     count = validate_archive(archive)
     archive.with_name("state-manifest.json").write_text(json.dumps({
         "format": 1, "bytes": archive.stat().st_size,

@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 import urllib.error
@@ -70,7 +71,7 @@ class DownloadTests(unittest.TestCase):
             with patch("download_checkpoint.urllib.request.urlopen", return_value=response):
                 with self.assertRaisesRegex(ValueError, "unexpected byte range"):
                     transfer(path, 10, lambda: "https://storage/?secret=value")
-            self.assertEqual(path.stat().st_size, 0)
+                self.assertEqual(path.read_bytes(), bytes(10))
 
     def test_retry_budget_and_logs_do_not_expose_signed_url(self):
         error = urllib.error.HTTPError("https://storage/?secret=value", 403, "signed secret", {}, None)
@@ -79,9 +80,142 @@ class DownloadTests(unittest.TestCase):
             with patch("download_checkpoint.urllib.request.urlopen", side_effect=error), \
                  patch("download_checkpoint.time.sleep"), contextlib.redirect_stdout(log):
                 with self.assertRaisesRegex(RuntimeError, "exhausted resumable retries"):
-                    transfer(Path(folder) / "download", 10, lambda: "https://storage/?secret=value", attempts=2)
+                    transfer(Path(folder) / "download", 10, lambda: "https://storage/?secret=value",
+                             attempts=2, retry_delay=0)
             self.assertIn("HTTP 403", log.getvalue())
             self.assertNotIn("secret", log.getvalue())
+
+    @contextlib.contextmanager
+    def storage(self, handler):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}/?secret=value"
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join()
+
+    def test_parallel_ranges_write_exact_bytes_and_reuse_signed_url(self):
+        data = bytes(range(256)) * 4097
+        requests = []
+        barrier = threading.Barrier(4)
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                start, end = map(int, self.headers["Range"].removeprefix("bytes=").split("-"))
+                requests.append((start, end, self.headers.get("Authorization")))
+                # A serial implementation cannot pass this barrier.
+                if start < 4 * 65536:
+                    barrier.wait(timeout=5)
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
+                self.send_header("Content-Length", str(end - start + 1))
+                self.end_headers()
+                self.wfile.write(data[start:end + 1])
+
+            def log_message(self, *args):
+                pass
+
+        with self.storage(Handler) as url, tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "artifact"
+            with patch("download_checkpoint.signed_url", return_value=url) as urls:
+                transfer(path, len(data), urls, workers=4, range_size=65536)
+            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(urls.call_count, 1)
+            self.assertEqual(sorted(requests), [(start, min(start + 65536, len(data)) - 1, None)
+                                               for start in range(0, len(data), 65536)])
+
+    def test_slow_trickling_connection_is_replaced_and_resumed(self):
+        data = b"0123456789" * 100
+        offsets = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                start, end = map(int, self.headers["Range"].removeprefix("bytes=").split("-"))
+                offsets.append(start)
+                first = len(offsets) == 1
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
+                self.send_header("Content-Length", str(end - start + 1))
+                self.end_headers()
+                if first:
+                    try:
+                        for value in data:
+                            self.wfile.write(bytes([value]))
+                            self.wfile.flush()
+                            time.sleep(.01)
+                    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                        pass
+                else:
+                    self.wfile.write(data[start:end + 1])
+
+            def log_message(self, *args):
+                pass
+
+        with self.storage(Handler) as url, tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "artifact"
+            transfer(path, len(data), lambda: url, attempts=2, workers=1,
+                     rate_window=.04, minimum_rate=10000, retry_delay=0)
+            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(len(offsets), 2)
+            self.assertEqual(offsets[0], 0)
+            self.assertGreater(offsets[1], 0)
+            self.assertLess(offsets[1], len(data))
+
+    def test_failed_range_never_unpacks_preallocated_artifact(self):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(206)
+                # Wrong range response must fail before writing anything.
+                self.send_header("Content-Range", "bytes 0-9/20")
+                self.end_headers()
+                self.wfile.write(b"incorrect!")
+
+            def log_message(self, *args):
+                pass
+
+        artifact = {"id": 1, "name": "checkpoint-0", "expired": False,
+                    "size_in_bytes": 20, "digest": "sha256:" + "a" * 64}
+        with self.storage(Handler) as url, tempfile.TemporaryDirectory() as folder, \
+             patch("download_checkpoint.api", return_value={"artifacts": [artifact]}), \
+             patch("download_checkpoint.signed_url", return_value=url), \
+             patch("download_checkpoint.unpack") as extract:
+            with self.assertRaisesRegex(ValueError, "unexpected byte range"):
+                download("owner/repo", 1, "checkpoint-0", Path(folder))
+            extract.assert_not_called()
+            self.assertEqual((Path(folder) / "artifact-1.zip.part").read_bytes(), bytes(20))
+
+    def test_connection_that_stops_sending_times_out_and_retries(self):
+        data = b"complete artifact"
+        offsets = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                start = int(self.headers["Range"].split("=")[1].split("-")[0])
+                offsets.append(start)
+                first = len(offsets) == 1
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
+                self.send_header("Content-Length", str(len(data) - start))
+                self.end_headers()
+                if first:
+                    self.wfile.write(data[:3])
+                    self.wfile.flush()
+                    time.sleep(.2)
+                else:
+                    self.wfile.write(data[start:])
+
+            def log_message(self, *args):
+                pass
+
+        with self.storage(Handler) as url, tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "artifact"
+            transfer(path, len(data), lambda: url, attempts=2, workers=1,
+                     socket_timeout=.05, retry_delay=0)
+            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(offsets, [0, 3])
 
     def test_digest_and_zip_members_fail_closed(self):
         for names, digest_valid in [(["state.tar.gz"], False),

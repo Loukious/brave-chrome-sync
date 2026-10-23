@@ -88,10 +88,20 @@ inputs, write failures, incomplete tar members, missing end markers, and gzip
 checksum errors fail the checkpoint before upload. A size
 and SHA256 manifest is checked before extraction. Vendored Cargo file checksums
 are validated before archiving and after restore.
-Checkpoint downloads resume at the last received byte after a network interruption,
-with a refreshed signed download URL and up to eight attempts within 120 minutes.
+Checkpoint downloads use eight concurrent connections with 64 MiB byte ranges.
+Each range resumes at its last received byte after an interruption, with a
+refreshed signed download URL and up to eight attempts within the 120-minute step
+limit. Connections time out after 30 seconds without data; connections below
+256 KiB/s over 30 seconds are replaced instead of waiting on a slow stream.
+Progress reports show bytes received, independently of the preallocated file size.
 The complete artifact SHA256 and ZIP checks pass before extraction; the existing
 tar/gzip and checkpoint manifest checks still run before restoring the build tree.
+Windows validation uploads and downloads a 128 MiB fixture through real GitHub
+artifact storage, checking parallel ranges and both artifact/checkpoint checksums.
+Local HTTP tests exercise disconnects and slow trickling responses. An optional
+Postman storage simulation can be run with
+`postman simulation run postman/simulations/checkpoint-download.sim.yaml --port 4900 --output ndjson`,
+then `python tests/run_checkpoint_simulation.py`.
 Restore uses Python's Unicode filesystem APIs instead of Windows tar's filename
 conversion, preserving exact PAX modification times and native file/directory
 links. Absolute links within the restore tree are converted to equivalent relative

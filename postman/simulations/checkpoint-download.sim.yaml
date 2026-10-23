@@ -1,0 +1,5 @@
+simulation: checkpoint-download
+routing: path
+mocks:
+  - routeKey: storage
+    path: ../mocks/checkpoint-storage/config.yaml

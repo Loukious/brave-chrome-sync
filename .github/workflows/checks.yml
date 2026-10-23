@@ -5,6 +5,7 @@ on:
   pull_request:
 permissions:
   contents: read
+  actions: read
 jobs:
   windows-updater:
     runs-on: windows-latest
@@ -25,6 +26,21 @@ jobs:
         run: python -m unittest discover -s tests -p test_checkpoint.py -v
       - name: Exercise interrupted checkpoint download and checksum failures
         run: python -m unittest discover -s tests -p test_download_checkpoint.py -v
+      - name: Create a checkpoint spanning multiple download ranges
+        run: python tests/checkpoint_artifact_fixture.py create
+      - name: Upload checkpoint transport fixture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: checkpoint-987654
+          path: work/checkpoint-transport-fixture/upload/*
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+      - name: Verify production downloader against real GitHub artifact storage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tests/checkpoint_artifact_fixture.py download
       - name: Exercise real Windows build timeout and process ownership
         run: python -m unittest discover -s tests -p test_build_process.py -v
       - name: Build fixture browser and real installer

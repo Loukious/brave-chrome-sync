@@ -1,11 +1,13 @@
 """Resume large artifact transfers without forwarding GitHub credentials to storage."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import http.client
 import os
 from pathlib import Path
 import re
 import shutil
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -40,39 +42,101 @@ def signed_url(repository, artifact_id):
             error.close()
 
 
-def transfer(path, size, get_url, attempts=8):
-    """Keep completed bytes after disconnects; refresh the signed URL on retry."""
-    with path.open("xb"):
-        pass
-    for attempt in range(attempts):
-        offset = path.stat().st_size
-        if offset == size:
-            return
+def transfer(path, size, get_url, attempts=8, *, workers=8, range_size=64 * 1024**2,
+             socket_timeout=30, rate_window=30, minimum_rate=256 * 1024, retry_delay=5):
+    """Download disjoint ranges concurrently, resuming each after slow/failed reads.
+
+    File length is preallocated and is never a completion indicator. Every range
+    must finish, then unpack() verifies GitHub's whole-artifact SHA256.
+    """
+    if size <= 0 or workers <= 0 or range_size <= 0 or attempts <= 0:
+        raise ValueError("Invalid artifact transfer size or concurrency")
+    with path.open("xb") as output:
+        output.truncate(size)
+    stopped = threading.Event()
+    url_lock, progress_lock = threading.Lock(), threading.Lock()
+    cached_url, url_time = "", 0
+    received, reported, report_time = 0, 0, time.monotonic()
+
+    def current_url(refresh):
+        nonlocal cached_url, url_time
+        with url_lock:
+            if refresh or not cached_url or time.monotonic() - url_time >= 45:
+                cached_url, url_time = get_url(), time.monotonic()
+            return cached_url
+
+    def progress(count):
+        nonlocal received, reported, report_time
+        with progress_lock:
+            received += count
+            now = time.monotonic()
+            if received - reported >= 1024**3 or now - report_time >= 30 or received == size:
+                print(f"Downloaded {received / 1024**3:.2f} / {size / 1024**3:.2f} GiB "
+                      f"({(received - reported) / max(now - report_time, .001) / 1024**2:.1f} MiB/s)", flush=True)
+                reported, report_time = received, now
+
+    def download_range(start, end):
+        offset = start
+        with path.open("r+b", buffering=0) as output:
+            output.seek(offset)
+            for attempt in range(attempts):
+                if offset > end:
+                    return
+                if stopped.is_set():
+                    return
+                try:
+                    request = urllib.request.Request(current_url(attempt > 0), headers={
+                        "Range": f"bytes={offset}-{end}", "Accept-Encoding": "identity"})
+                    with urllib.request.urlopen(request, timeout=socket_timeout) as response:
+                        expected = f"bytes {offset}-{end}/{size}"
+                        length = response.headers.get("Content-Length")
+                        if (response.status != 206 or response.headers.get("Content-Range") != expected or
+                                (length is not None and length != str(end - offset + 1))):
+                            raise ValueError("Storage returned an unexpected byte range; refusing to write")
+                        output.seek(offset)
+                        window_start, window_offset = time.monotonic(), offset
+                        while offset <= end:
+                            if stopped.is_set():
+                                return
+                            # read1 returns available bytes; read(n) can block on a
+                            # trickling connection indefinitely despite socket timeouts.
+                            chunk = response.read1(min(1024 * 1024, end - offset + 1))
+                            if not chunk:
+                                raise ConnectionError("Incomplete artifact transfer")
+                            if output.write(chunk) != len(chunk):
+                                raise ValueError("Short artifact file write")
+                            offset += len(chunk)
+                            progress(len(chunk))
+                            elapsed = time.monotonic() - window_start
+                            if elapsed >= rate_window and offset <= end:
+                                if (offset - window_offset) / elapsed < minimum_rate:
+                                    raise TimeoutError("Artifact connection is too slow")
+                                window_start, window_offset = time.monotonic(), offset
+                    return
+                except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
+                    # Never log exception text: it can contain the signed URL.
+                    reason = f"HTTP {error.code}" if isinstance(error, urllib.error.HTTPError) else type(error).__name__
+                    print(f"Artifact range {start}-{end} interrupted ({reason}); resuming at {offset} "
+                          f"(attempt {attempt + 1}/{attempts})", flush=True)
+                    if attempt + 1 == attempts:
+                        raise RuntimeError("Artifact transfer exhausted resumable retries") from None
+                    if stopped.wait(min(retry_delay * (attempt + 1), 30)):
+                        return
+
+    print(f"Downloading with up to {workers} connections and {range_size / 1024**2:g} MiB ranges", flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(download_range, start, min(start + range_size, size) - 1)
+                   for start in range(0, size, range_size)]
         try:
-            request = urllib.request.Request(get_url(), headers={
-                "Range": f"bytes={offset}-{size - 1}", "Accept-Encoding": "identity"})
-            with urllib.request.urlopen(request, timeout=120) as response:
-                expected = f"bytes {offset}-{size - 1}/{size}"
-                if response.status != 206 or response.headers.get("Content-Range") != expected:
-                    raise ValueError("Storage returned an unexpected byte range; refusing to append")
-                with path.open("ab") as output:
-                    while output.tell() < size:
-                        chunk = response.read(min(1024 * 1024, size - output.tell()))
-                        if not chunk:
-                            raise ConnectionError("Incomplete artifact transfer")
-                        output.write(chunk)
-                        if output.tell() // (1024**3) != (output.tell() - len(chunk)) // (1024**3):
-                            print(f"Downloaded {output.tell() / 1024**3:.1f} / {size / 1024**3:.1f} GiB", flush=True)
-            return
-        except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
-            # Never log exception text: it can contain the signed URL.
-            reason = f"HTTP {error.code}" if isinstance(error, urllib.error.HTTPError) else type(error).__name__
-            offset = path.stat().st_size
-            print(f"Artifact transfer interrupted ({reason}); retained {offset} of {size} bytes "
-                  f"(attempt {attempt + 1}/{attempts})", flush=True)
-            if attempt + 1 == attempts:
-                raise RuntimeError("Artifact transfer exhausted resumable retries") from None
-            time.sleep(min(5 * (attempt + 1), 30))
+            for future in as_completed(futures):
+                future.result()
+        except BaseException:
+            stopped.set()
+            for future in futures:
+                future.cancel()
+            raise
+    if received != size:
+        raise ValueError("Artifact transfer did not complete every range")
 
 
 def unpack(path, destination, expected_digest):

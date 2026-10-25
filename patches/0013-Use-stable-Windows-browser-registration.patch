@@ -1,0 +1,217 @@
+From c0fb3be302b4192d34874d2663e66dabdcf85b41 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Sun, 25 Oct 2026 01:33:36 +0100
+Subject: [PATCH] Use the stable browser registration for Windows defaults
+
+---
+ .../chrome/installer/util/shell_util.cc       |  34 ++++++
+ .../util/sync_browser_registration.h          | 103 ++++++++++++++++++
+ .../chrome-installer-util-shell_util.cc.patch |  32 ++++++
+ 3 files changed, 169 insertions(+)
+ create mode 100644 chromium_src/chrome/installer/util/sync_browser_registration.h
+
+diff --git a/chromium_src/chrome/installer/util/shell_util.cc b/chromium_src/chrome/installer/util/shell_util.cc
+index 25949361b..04842d860 100644
+--- a/chromium_src/chrome/installer/util/shell_util.cc
++++ b/chromium_src/chrome/installer/util/shell_util.cc
+@@ -10,6 +10,7 @@
+ #include "chrome/common/chrome_icon_resources_win.h"
+ #include "chrome/install_static/install_util.h"
+ #include "components/version_info/channel.h"
++#include "brave/chromium_src/chrome/installer/util/sync_browser_registration.h"
+ 
+ namespace {
+ 
+@@ -68,7 +69,40 @@ int GetIconIndexForFileType() {
+ #define BRAVE_GET_SHELL_INTEGRATION_ENTRIES
+ #endif
+ 
++#define BRAVE_PROBE_CURRENT_DEFAULT_HANDLERS                            \
++  if (auto sync = brave_chrome_sync::Find(chrome_exe.value())) {         \
++    for (const auto& identifier : identifiers) {                        \
++      if (!brave_chrome_sync::ResolvesToLauncher(                       \
++              *sync, identifier.c_str(), type == AT_URLPROTOCOL)) {     \
++        return ShellUtil::NOT_DEFAULT;                                 \
++      }                                                               \
++    }                                                                 \
++    return ShellUtil::IS_DEFAULT;                                      \
++  }
++#define BRAVE_REGISTER_CHROME_BROWSER_IMPL                              \
++  if (auto sync = brave_chrome_sync::Find(chrome_exe.value())) {         \
++    return brave_chrome_sync::HasProtocol(*sync, L"http") &&             \
++           brave_chrome_sync::HasProtocol(*sync, L"https");              \
++  }
++#define BRAVE_SHOW_MAKE_CHROME_DEFAULT_SYSTEM_UI                         \
++  if (auto sync = brave_chrome_sync::Find(chrome_exe.value())) {         \
++    return GetChromeDefaultState() == IS_DEFAULT ||                     \
++           base::win::LaunchSettingsDefaultApps(sync->name, true);      \
++  }
++#define BRAVE_REGISTER_CHROME_FOR_PROTOCOLS                              \
++  if (auto sync = brave_chrome_sync::Find(chrome_exe.value())) {         \
++    for (const auto& association : protocol_associations.associations) { \
++      if (!brave_chrome_sync::HasProtocol(*sync, association.first)) {   \
++        return false;                                                 \
++      }                                                               \
++    }                                                                 \
++    return true;                                                      \
++  }
+ #include <chrome/installer/util/shell_util.cc>
++#undef BRAVE_REGISTER_CHROME_FOR_PROTOCOLS
++#undef BRAVE_SHOW_MAKE_CHROME_DEFAULT_SYSTEM_UI
++#undef BRAVE_REGISTER_CHROME_BROWSER_IMPL
++#undef BRAVE_PROBE_CURRENT_DEFAULT_HANDLERS
+ #undef BRAVE_GET_SHELL_INTEGRATION_ENTRIES
+ #undef BRAVE_GET_APP_EXT_REGISTRATION_ENTRIES
+ #undef BRAVE_GET_CHROME_PROG_ID_ENTRIES
+diff --git a/chromium_src/chrome/installer/util/sync_browser_registration.h b/chromium_src/chrome/installer/util/sync_browser_registration.h
+new file mode 100644
+index 000000000..724a7367f
+--- /dev/null
++++ b/chromium_src/chrome/installer/util/sync_browser_registration.h
+@@ -0,0 +1,103 @@
++// SPDX-License-Identifier: MPL-2.0
++#ifndef BRAVE_CHROMIUM_SRC_CHROME_INSTALLER_UTIL_SYNC_BROWSER_REGISTRATION_H_
++#define BRAVE_CHROMIUM_SRC_CHROME_INSTALLER_UTIL_SYNC_BROWSER_REGISTRATION_H_
++
++#include <windows.h>
++#include <shlwapi.h>
++
++#include <initializer_list>
++#include <iterator>
++#include <optional>
++#include <string>
++
++namespace brave_chrome_sync {
++
++struct Registration {
++  std::wstring root;
++  std::wstring name;
++  std::wstring capabilities;
++};
++
++inline bool EqualPath(const std::wstring& left, const std::wstring& right) {
++  return CompareStringOrdinal(left.c_str(), -1, right.c_str(), -1, TRUE) ==
++         CSTR_EQUAL;
++}
++
++inline std::wstring RegistryString(const std::wstring& key,
++                                   const std::wstring& value) {
++  wchar_t buffer[32768];
++  DWORD bytes = sizeof(buffer);
++  if (RegGetValueW(HKEY_CURRENT_USER, key.c_str(), value.c_str(), RRF_RT_REG_SZ,
++                   nullptr, buffer, &bytes) != ERROR_SUCCESS) {
++    return {};
++  }
++  return buffer;
++}
++
++inline bool IsFile(const std::wstring& path) {
++  const DWORD attributes = GetFileAttributesW(path.c_str());
++  return attributes != INVALID_FILE_ATTRIBUTES &&
++         !(attributes & FILE_ATTRIBUTE_DIRECTORY);
++}
++
++inline std::optional<Registration> Find(const std::wstring& executable) {
++  const auto separator = executable.find_last_of(L"\\/");
++  if (separator == std::wstring::npos) {
++    return std::nullopt;
++  }
++  const auto directory = executable.substr(0, separator);
++  const auto version_separator = directory.find_last_of(L"\\/");
++  if (version_separator == std::wstring::npos) {
++    return std::nullopt;
++  }
++  const auto versions = directory.substr(0, version_separator);
++  const auto root_separator = versions.find_last_of(L"\\/");
++  if (root_separator == std::wstring::npos ||
++      !EqualPath(versions.substr(root_separator + 1), L"versions") ||
++      !IsFile(directory + L"\\sync-release.json")) {
++    return std::nullopt;
++  }
++  const auto root = versions.substr(0, root_separator);
++  if (!IsFile(root + L"\\SyncBrowser.exe")) {
++    return std::nullopt;
++  }
++  for (const auto* channel : {L"release", L"beta", L"nightly"}) {
++    const auto client = std::wstring(
++        L"Software\\Clients\\StartMenuInternet\\BraveChromeSync-") + channel;
++    if (!EqualPath(RegistryString(client, L"InstallRoot"), root)) {
++      continue;
++    }
++    const auto name = std::wstring(L"Brave Chrome Sync") +
++                      (std::wstring(channel) == L"release" ? L"" :
++                       std::wstring(channel) == L"beta" ? L" Beta" : L" Nightly");
++    const auto capabilities = client + L"\\Capabilities";
++    if (RegistryString(L"Software\\RegisteredApplications", name) ==
++        capabilities) {
++      return Registration{root, name, capabilities};
++    }
++  }
++  return std::nullopt;
++}
++
++inline bool ResolvesToLauncher(const Registration& registration,
++                               const wchar_t* identifier,
++                               bool protocol) {
++  wchar_t executable[32768];
++  DWORD length = static_cast<DWORD>(std::size(executable));
++  const auto flags = protocol ? ASSOCF_IS_PROTOCOL : ASSOCF_NONE;
++  return SUCCEEDED(AssocQueryStringW(flags, ASSOCSTR_EXECUTABLE, identifier,
++                                    L"open", executable, &length)) &&
++         EqualPath(executable, registration.root + L"\\SyncBrowser.exe");
++}
++
++inline bool HasProtocol(const Registration& registration,
++                         const std::wstring& protocol) {
++  const auto prog_id = RegistryString(
++      registration.capabilities + L"\\URLAssociations", protocol);
++  return !prog_id.empty() &&
++         ResolvesToLauncher(registration, prog_id.c_str(), false);
++}
++
++}  // namespace brave_chrome_sync
++
++#endif  // BRAVE_CHROMIUM_SRC_CHROME_INSTALLER_UTIL_SYNC_BROWSER_REGISTRATION_H_
+diff --git a/patches/chrome-installer-util-shell_util.cc.patch b/patches/chrome-installer-util-shell_util.cc.patch
+index 896968f43..1edf925f4 100644
+--- a/patches/chrome-installer-util-shell_util.cc.patch
++++ b/patches/chrome-installer-util-shell_util.cc.patch
+@@ -26,3 +26,35 @@ index 3710cb78f57047096c2f2651739a089f060cd6f8..0b23552e2d22b81f3539684186dae17f
+    entries->push_back(
+        std::make_unique<RegistryEntry>(key_name, prog_id, std::wstring()));
+  }
++@@ -933,6 +936,7 @@ ShellUtil::DefaultState ProbeCurrentDefaultHandlers(
++     const base::FilePath& chrome_exe,
++     base::span<const base::wcstring_view> identifiers,
++     ASSOCIATIONTYPE type) {
+++  BRAVE_PROBE_CURRENT_DEFAULT_HANDLERS
++ #if DCHECK_IS_ON()
++   DCHECK(!identifiers.empty());
++   for (const auto& identifier : identifiers) {
++@@ -1307,6 +1311,7 @@ bool RegisterChromeBrowserImpl(const base::FilePath& chrome_exe,
++                                const std::wstring& unique_suffix,
++                                bool elevate_if_not_admin,
++                                bool best_effort_no_rollback) {
+++  BRAVE_REGISTER_CHROME_BROWSER_IMPL
++   base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
++ 
++   std::wstring suffix;
++@@ -1883,6 +1888,7 @@ bool ShellUtil::LaunchUninstallAppsSettings() {
++ 
++ bool ShellUtil::ShowMakeChromeDefaultSystemUI(
++     const base::FilePath& chrome_exe) {
+++  BRAVE_SHOW_MAKE_CHROME_DEFAULT_SYSTEM_UI
++   if (!install_static::SupportsSetAsDefaultBrowser())
++     return false;
++ 
++@@ -2051,6 +2057,7 @@ bool ShellUtil::RegisterChromeForProtocols(
++     const std::wstring& unique_suffix,
++     const ProtocolAssociations& protocol_associations,
++     bool elevate_if_not_admin) {
+++  BRAVE_REGISTER_CHROME_FOR_PROTOCOLS
++   std::wstring suffix;
++   if (!unique_suffix.empty()) {
++     suffix = unique_suffix;
+-- 
+2.55.0.windows.3
+

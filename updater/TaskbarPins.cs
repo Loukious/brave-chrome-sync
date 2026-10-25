@@ -79,6 +79,9 @@ internal static unsafe class TaskbarPins
                 Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<void*, char*, int>)Table(link)[20])(link, path));
             fixed (char* root = updater.Root)
                 Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<void*, char*, int>)Table(link)[9])(link, root));
+            var icon = updater.PathInRoot(updater.ReadVersion().Browser);
+            fixed (char* path = icon)
+                Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<void*, char*, int, int>)Table(link)[17])(link, path, 0));
             store = Query(link, new Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"));
             var key = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
             var value = new Variant { Type = 31, Pointer = Marshal.StringToCoTaskMemUni("Loukious.BraveChromeSync." + channel) };

@@ -85,6 +85,15 @@ internal static class Program
         await ConfigureTask(updater.Root, false);
     }
 
+    private static void RepairRegistrationAndShortcuts(Updater updater)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        BrowserRegistration.Register(updater);
+        TaskbarPins.Repair(updater);
+        TaskbarPins.Repair(updater, Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
+        TaskbarPins.Repair(updater, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Brave Chrome Sync"));
+    }
+
     public static async Task<int> Main(string[] arguments)
     {
         string? statusFile = Option(arguments, "--status-file");
@@ -104,6 +113,12 @@ internal static class Program
                 return 0;
             }
             updater.ReadInstallation();
+            if (arguments.Contains("--cleanup-versions"))
+            {
+                var report = await updater.CleanupVersionsAsync(!arguments.Contains("--dry-run"));
+                Updater.AtomicWrite(updater.PathInRoot("version-cleanup.json"), report, Models.Default.VersionCleanupReport);
+                return 0;
+            }
             if (arguments.Contains("--register-browser"))
             {
                 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
@@ -121,6 +136,13 @@ internal static class Program
             var currentUpdater = Path.Combine(Path.GetDirectoryName(updater.PathInRoot(updater.ReadVersion().Browser))!, "SyncUpdater.exe");
             if (!Path.GetFullPath(Environment.ProcessPath!).Equals(currentUpdater, StringComparison.OrdinalIgnoreCase))
             {
+                // Keep the stable launcher's retention policy even if a pending
+                // release still contains an older version of the updater.
+                if (!arguments.Contains("--check") && !arguments.Contains("--background"))
+                {
+                    RepairRegistrationAndShortcuts(updater);
+                    await updater.MaintainVersionsAsync();
+                }
                 var commands = new[] { "--check", "--background", "--relaunch" };
                 var forwarded = commands.Any(arguments.Contains) ? arguments : new[] { "--" }.Concat(arguments);
                 using var delegated = Start(currentUpdater, new[] { "--root", root }.Concat(forwarded))!;
@@ -155,6 +177,7 @@ internal static class Program
                 while (updater.BrowserIsRunning() && DateTime.UtcNow < deadline) await Task.Delay(250);
             }
             await updater.ActivateAsync();
+            RepairRegistrationAndShortcuts(updater);
             using var browserProcess = updater.StartBrowser(browserArguments);
             using var background = Start(currentUpdater, new[] { "--background", "--root", root });
             return 0;

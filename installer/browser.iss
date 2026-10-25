@@ -58,6 +58,8 @@ Type: files; Name: "{app}\last-check.json"
 Type: files; Name: "{app}\updater-error.txt"
 Type: files; Name: "{app}\scheduled-task-warning.txt"
 Type: files; Name: "{app}\taskbar-warning.txt"
+Type: files; Name: "{app}\version-cleanup.json"
+Type: files; Name: "{app}\version-cleanup-warning.txt"
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

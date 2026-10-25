@@ -8,6 +8,9 @@ if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
 $current = Get-Content (Join-Path $root 'current.json') -Raw | ConvertFrom-Json
 if ($current.tag -ne $tag) { throw 'Installer did not select its release.' }
 & (Join-Path $PSScriptRoot 'browser-registration.test.ps1') -InstallRoot $root -Channel 'nightly'
+$nativeRegistration = Join-Path $PSScriptRoot '../work/native-registration/native_registration.exe'
+& $nativeRegistration $root (Join-Path $root $current.browser) 'Brave Chrome Sync Nightly'
+if ($LASTEXITCODE -ne 0) { throw 'Native Windows browser registration failed.' }
 $profile = Join-Path $root 'Test User Data'
 New-Item $profile -ItemType Directory | Out-Null
 Set-Content (Join-Path $profile 'sentinel.txt') 'profile remains'

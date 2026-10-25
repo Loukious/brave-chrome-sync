@@ -182,6 +182,20 @@ and keeps an independent profile at `%LOCALAPPDATA%\BraveChromeSync\User Data`.
 Updates use verified ZIP payloads from this repository's published releases,
 install versions side by side, retain the previous version, and never replace
 the running executable. The profile is retained across updates and uninstall.
+The launcher removes obsolete payloads after startup/activation, retaining the
+current and previous versions, a pending update, and versions used by a running
+browser or updater. It defers locked files, redirected paths, unknown version
+identities and directories containing browser profile data. To review a local
+cleanup, run `SyncBrowser.exe --cleanup-versions --dry-run`; the installation's
+`version-cleanup.json` lists the proposed removals. Omit `--dry-run` to apply it.
+
+Windows uses one **Brave Chrome Sync** Default Apps entry and stable launcher
+handlers. The browser's default check resolves the effective Windows handler,
+and its **Make default** button opens that existing entry. Startup migrates
+duplicate Brave registrations belonging to this installation while preserving
+their old ProgIDs as aliases, so existing user selections remain valid. Other
+Brave installations and Windows UserChoice selections are preserved. Desktop,
+Start Menu and taskbar shortcut icons are refreshed to the retained version.
 The binaries are currently unsigned.
 
 For portable use, extract the release ZIP manually, or use PowerShell 7 and

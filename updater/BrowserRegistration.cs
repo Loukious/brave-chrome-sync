@@ -15,14 +15,14 @@ internal static class BrowserRegistration
     private static string Name(string channel) => channel == "release" ? "Brave Chrome Sync" : "Brave Chrome Sync " + (channel == "beta" ? "Beta" : "Nightly");
     private static string Client(string channel) => @"Software\Clients\StartMenuInternet\BraveChromeSync-" + channel;
     private static string ProgId(string channel, string kind) => "BraveChromeSync." + channel + "." + kind;
-    private static void Set(string path, string name, string value)
+    public static void Register(Updater updater, RegistryKey? registry = null)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(path);
-        key.SetValue(name, value, RegistryValueKind.String);
-    }
-
-    public static void Register(Updater updater)
-    {
+        var user = registry ?? Registry.CurrentUser;
+        void Set(string path, string name, string value)
+        {
+            using var key = user.CreateSubKey(path);
+            key.SetValue(name, value, RegistryValueKind.String);
+        }
         var channel = updater.ReadInstallation().Channel;
         var name = Name(channel);
         var client = Client(channel);
@@ -56,13 +56,70 @@ internal static class BrowserRegistration
         foreach (var extension in Extensions)
         {
             Set(capabilities + @"\FileAssociations", extension, ProgId(channel, "HTML"));
-            using var openWith = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + extension + @"\OpenWithProgids");
+            using var openWith = user.CreateSubKey(@"Software\Classes\" + extension + @"\OpenWithProgids");
             openWith.SetValue(ProgId(channel, "HTML"), Array.Empty<byte>(), RegistryValueKind.None);
         }
         foreach (var protocol in new[] { "http", "https" })
             Set(capabilities + @"\URLAssociations", protocol, ProgId(channel, "URL"));
         Set(@"Software\RegisteredApplications", name, capabilities);
+        MigrateLegacyRegistrations(updater, user, client, command, icon, name);
         SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    private static bool OwnsCommand(Updater updater, string? command)
+    {
+        if (command == null || !command.StartsWith('"')) return false;
+        var end = command.IndexOf('"', 1);
+        if (end < 0 || (end + 1 < command.Length && !char.IsWhiteSpace(command[end + 1]))) return false;
+        try
+        {
+            var executable = Path.GetFullPath(command[1..end]);
+            return executable.Equals(updater.PathInRoot("SyncBrowser.exe"), StringComparison.OrdinalIgnoreCase) ||
+                (executable.StartsWith(updater.PathInRoot("versions") + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                 Path.GetFileName(executable).ToLowerInvariant() is "brave.exe" or "chrome.exe");
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidDataException or NotSupportedException) { return false; }
+    }
+
+    private static void MigrateLegacyRegistrations(Updater updater, RegistryKey user, string canonicalClient,
+                                                   string command, string icon, string name)
+    {
+        using var registered = user.OpenSubKey(@"Software\RegisteredApplications", true);
+        if (registered == null) return;
+        const string prefix = @"Software\Clients\StartMenuInternet\";
+        foreach (var application in registered.GetValueNames())
+        {
+            if (registered.GetValue(application) is not string capabilities ||
+                !capabilities.StartsWith(prefix + "Brave", StringComparison.OrdinalIgnoreCase) ||
+                !capabilities.EndsWith(@"\Capabilities", StringComparison.OrdinalIgnoreCase)) continue;
+            var client = capabilities[..^13];
+            if (client.Equals(canonicalClient, StringComparison.OrdinalIgnoreCase) ||
+                client[prefix.Length..].Contains('\\')) continue;
+            using var openCommand = user.OpenSubKey(client + @"\shell\open\command");
+            if (!OwnsCommand(updater, openCommand?.GetValue("") as string)) continue;
+            // Preserve existing UserChoice ProgIDs as stable aliases. Removing
+            // them would invalidate a user's previously selected default.
+            foreach (var associations in new[] { "URLAssociations", "FileAssociations" })
+            {
+                using var values = user.OpenSubKey(capabilities + "\\" + associations);
+                if (values == null) continue;
+                foreach (var association in values.GetValueNames())
+                {
+                    if (values.GetValue(association) is not string progId || progId.Contains('\\')) continue;
+                    var path = @"Software\Classes\" + progId;
+                    using var handler = user.OpenSubKey(path + @"\shell\open\command", true);
+                    if (!OwnsCommand(updater, handler?.GetValue("") as string)) continue;
+                    handler!.SetValue("", command);
+                    using var app = user.CreateSubKey(path + @"\Application");
+                    app.SetValue("ApplicationName", name);
+                    app.SetValue("ApplicationIcon", icon);
+                    using var defaultIcon = user.CreateSubKey(path + @"\DefaultIcon");
+                    defaultIcon.SetValue("", icon);
+                }
+            }
+            registered.DeleteValue(application, false);
+            user.DeleteSubKeyTree(client, false);
+        }
     }
 
     public static void Unregister(Updater updater)

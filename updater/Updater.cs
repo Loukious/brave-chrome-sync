@@ -23,6 +23,7 @@ public record ReleaseManifest(string ReleaseTag, string Channel, int Protocol = 
 [JsonSerializable(typeof(UpdateStatus))]
 [JsonSerializable(typeof(ReleaseManifest))]
 [JsonSerializable(typeof(GoogleClientConfiguration))]
+[JsonSerializable(typeof(VersionCleanupReport))]
 public partial class Models : JsonSerializerContext { }
 
 public sealed class Updater(string root, HttpClient http)
@@ -263,7 +264,11 @@ public sealed class Updater(string root, HttpClient http)
     {
         using var updateLock = await LockAsync(TimeSpan.FromSeconds(30));
         ReadInstallation();
-        if (!File.Exists(PathInRoot("pending.json")) || BrowserIsRunning()) return;
+        if (!File.Exists(PathInRoot("pending.json")) || BrowserIsRunning())
+        {
+            MaintainVersions();
+            return;
+        }
         var pending = ReadVersion("pending.json");
         var current = ReadVersion();
         if (!IsNewer(pending, current)) throw new InvalidDataException("Refusing an update downgrade");
@@ -276,6 +281,34 @@ public sealed class Updater(string root, HttpClient http)
             if (File.Exists(PathInRoot("SyncBrowser.exe"))) BrowserRegistration.Register(this);
             TaskbarPins.Repair(this);
         }
+        MaintainVersions();
+    }
+
+    private void MaintainVersions()
+    {
+        try
+        {
+            var report = VersionRetention.Clean(this, true);
+            AtomicWrite(PathInRoot("version-cleanup.json"), report, Models.Default.VersionCleanupReport);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+                                       InvalidDataException or JsonException or System.ComponentModel.Win32Exception)
+        {
+            try { File.WriteAllText(PathInRoot("version-cleanup-warning.txt"), error.Message); }
+            catch (Exception writeError) when (writeError is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    public async Task<VersionCleanupReport> CleanupVersionsAsync(bool apply)
+    {
+        using var updateLock = await LockAsync(TimeSpan.FromSeconds(30));
+        return VersionRetention.Clean(this, apply);
+    }
+
+    internal async Task MaintainVersionsAsync()
+    {
+        using var updateLock = await LockAsync(TimeSpan.FromSeconds(30));
+        MaintainVersions();
     }
 
     public Process StartBrowser(IEnumerable<string> arguments)

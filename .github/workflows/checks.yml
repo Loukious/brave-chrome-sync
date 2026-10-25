@@ -50,6 +50,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Fixture build failed' }
           python tests/installer_fixture.py
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+      - name: Compile the native Windows browser registration code
+        run: python tests/build_native_registration_test.py
       - name: Install, launch through shortcuts and preserve profile
         shell: pwsh
         run: ./tests/installer.test.ps1
@@ -76,6 +78,7 @@ jobs:
           tag=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_tag"])')
           sha=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_commit"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/base-check" --tag "$tag" --sha "$sha" --patch-only
+          python tests/check_native_shell_patch.py "$RUNNER_TEMP/base-check/src/brave"
       - name: Replay patches against the newest configured upstream
         shell: bash
         env:
@@ -85,3 +88,4 @@ jobs:
           tag=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_tag"])')
           sha=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_sha"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/latest-check" --tag "$tag" --sha "$sha" --patch-only
+          python tests/check_native_shell_patch.py "$RUNNER_TEMP/latest-check/src/brave"

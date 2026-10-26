@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
+// Chromium guards this macro both before and after Windows headers.
+#define StrCat StrCat
 #include "sync_browser_registration.h"
+#define StrCat StrCat
 
 #include <iostream>
 #include <stdexcept>

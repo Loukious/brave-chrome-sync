@@ -1,0 +1,25 @@
+From ba30668693428e55d3feaa3cca406ab0aaa08abc Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Mon, 26 Oct 2026 16:06:29 +0100
+Subject: [PATCH] Use Chromium Windows shell header to avoid macro collisions
+
+---
+ chromium_src/chrome/installer/util/sync_browser_registration.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/chromium_src/chrome/installer/util/sync_browser_registration.h b/chromium_src/chrome/installer/util/sync_browser_registration.h
+index 724a7367f..4bcef0a4a 100644
+--- a/chromium_src/chrome/installer/util/sync_browser_registration.h
++++ b/chromium_src/chrome/installer/util/sync_browser_registration.h
+@@ -3,7 +3,7 @@
+ #define BRAVE_CHROMIUM_SRC_CHROME_INSTALLER_UTIL_SYNC_BROWSER_REGISTRATION_H_
+ 
+ #include <windows.h>
+-#include <shlwapi.h>
++#include "base/win/shlwapi.h"
+ 
+ #include <initializer_list>
+ #include <iterator>
+-- 
+2.55.0.windows.3
+

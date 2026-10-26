@@ -80,6 +80,16 @@ class ResumeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "changed"):
                 appended_patches(old.__getitem__, {**current, "patches/series": series}.__getitem__)
 
+    def test_native_registration_header_can_be_fixed_without_reinitializing_checkpoint(self):
+        old = self.fixture()
+        name = "chromium_src/chrome/installer/util/sync_browser_registration.h"
+        current = {**old, "patches/series": b"one.patch\nfix.patch\n", "patches/fix.patch": self.cpp_patch(name)}
+        self.assertEqual(appended_patches(old.__getitem__, current.__getitem__), ["fix.patch"])
+        for foreign in ["chromium_src/chrome/installer/util/shell_util.cc",
+                        "chromium_src/chrome/installer/util/other.h"]:
+            with self.subTest(foreign=foreign), self.assertRaises(ValueError):
+                appended_patches(old.__getitem__, {**current, "patches/fix.patch": self.cpp_patch(foreign)}.__getitem__)
+
     def test_append_requires_normal_brave_cpp_without_initialization_changes(self):
         old = self.fixture()
         for name in ["patches/chromium.patch", "browser/BUILD.gn", "rewrite/fix.cc", "browser/../fix.cc",

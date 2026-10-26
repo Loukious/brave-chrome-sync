@@ -73,7 +73,8 @@ def appended_patches(old_read, current_read):
         for a, b in (match.groups() for match in files):
             cpp = a.startswith(("browser/", "components/")) and a.endswith((".cc", ".h"))
             template = a.startswith("chromium_src/") and a.endswith(".html.ts.lit_mangler.ts")
-            if a != b or "\\" in a or ".." in PurePosixPath(a).parts or not (cpp or template):
+            registration = a == "chromium_src/chrome/installer/util/sync_browser_registration.h"
+            if a != b or "\\" in a or ".." in PurePosixPath(a).parts or not (cpp or template or registration):
                 raise ValueError("Checkpoint recovery only supports appended Brave C++ or Lit template patches")
     return extra
 

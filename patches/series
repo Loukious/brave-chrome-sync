@@ -11,3 +11,4 @@
 0011-Send-Google-Sync-directly-to-Google.patch
 0012-Restore-Chromium-Sync-controls-template.patch
 0013-Use-stable-Windows-browser-registration.patch
+0014-Use-Chromium-Windows-shell-header.patch

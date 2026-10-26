@@ -12,6 +12,10 @@ from stage import compile_checked, compile_budget
 
 class CompilePreflightTests(unittest.TestCase):
     command = ["pnpm", "run", "build", "Release", "--target=create_dist_zips", "--gn=is_debug:false"]
+    native_target = "obj/chrome/installer/util/with_no_strings/shell_util.obj"
+
+    def native_marker(self, root, digest="source"):
+        (root / "native-shell-compile.json").write_text(json.dumps({"patch_digest": digest, "target": self.native_target}))
 
     def test_slow_transfer_reduces_compilation_to_preserve_checkpoint_time(self):
         start = datetime(2026, 10, 21, tzinfo=timezone.utc)
@@ -45,6 +49,7 @@ class CompilePreflightTests(unittest.TestCase):
             with self.subTest(result=result), tempfile.TemporaryDirectory() as folder, \
                  patch("stage.timed_run", return_value=result) as build:
                 root = Path(folder)
+                self.native_marker(root)
                 self.assertEqual(compile_checked(self.command, root, 100, "source"), result)
                 self.assertEqual(build.call_count, 1)
                 self.assertIn("--target=chrome/browser/resources/settings:build_ts", build.call_args.args[0])
@@ -54,6 +59,7 @@ class CompilePreflightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch("stage.timed_run", return_value=0) as build, \
              patch("stage.time.monotonic", side_effect=[10, 12, 40]):
             root = Path(folder)
+            self.native_marker(root)
             self.assertEqual(compile_checked(self.command, root, 100, "source"), 0)
             self.assertEqual(build.call_args_list[0].args[2], 98)
             self.assertEqual(build.call_args_list[1].args, (self.command, root / "src/brave", 70))
@@ -62,6 +68,7 @@ class CompilePreflightTests(unittest.TestCase):
     def test_resumed_matching_source_skips_preflight_but_changed_source_does_not(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
+            self.native_marker(root, "old")
             marker = root / "settings-typecheck.json"
             marker.write_text(json.dumps({"patch_digest":"old", "target":"chrome/browser/resources/settings:build_ts"}))
             with patch("stage.timed_run", return_value=0) as build:
@@ -70,7 +77,7 @@ class CompilePreflightTests(unittest.TestCase):
                 self.assertEqual(build.call_args.args[0], self.command)
             with patch("stage.timed_run", return_value=0) as build:
                 self.assertEqual(compile_checked(self.command, root, 100, "new"), 0)
-                self.assertEqual(build.call_count, 2)
+                self.assertEqual(build.call_count, 3)
 
     def test_expired_budget_after_preflight_preserves_completion_for_next_stage(self):
         with tempfile.TemporaryDirectory() as folder, patch("stage.timed_run", return_value=0) as build, \
@@ -78,6 +85,27 @@ class CompilePreflightTests(unittest.TestCase):
             root = Path(folder)
             self.assertEqual(compile_checked(self.command, root, 100, "source"), 124)
             self.assertEqual(build.call_count, 1)
+            self.assertTrue((root / "native-shell-compile.json").exists())
+            self.assertFalse((root / "settings-typecheck.json").exists())
+
+    def test_native_compile_failure_stops_before_settings_and_full_browser(self):
+        for result in [1, 124]:
+            with self.subTest(result=result), tempfile.TemporaryDirectory() as folder, \
+                 patch("stage.timed_run", return_value=result) as build:
+                root = Path(folder)
+                self.assertEqual(compile_checked(self.command, root, 100, "source"), result)
+                self.assertEqual(build.call_count, 1)
+                self.assertIn("--target=" + self.native_target, build.call_args.args[0])
+                self.assertFalse((root / "native-shell-compile.json").exists())
+                self.assertFalse((root / "settings-typecheck.json").exists())
+
+    def test_native_settings_and_full_browser_share_one_deadline(self):
+        with tempfile.TemporaryDirectory() as folder, patch("stage.timed_run", return_value=0) as build, \
+             patch("stage.time.monotonic", side_effect=[0, 1, 11, 21]):
+            root = Path(folder)
+            self.assertEqual(compile_checked(self.command, root, 100, "source"), 0)
+            self.assertEqual([call.args[2] for call in build.call_args_list], [99, 89, 79])
+            self.assertTrue((root / "native-shell-compile.json").exists())
             self.assertTrue((root / "settings-typecheck.json").exists())
 
 

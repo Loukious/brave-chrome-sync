@@ -27,18 +27,24 @@ def timed_run(command, cwd, seconds):
 
 
 def compile_checked(command, root, seconds, patch_digest):
-    """Type-check Settings before spending the stage on the complete browser."""
+    """Compile native integration and Settings before the complete browser."""
     if seconds <= 0:
         return 124
     deadline = time.monotonic() + seconds
-    marker = root / "settings-typecheck.json"
-    target = "chrome/browser/resources/settings:build_ts"
-    expected = {"patch_digest": patch_digest, "target": target}
-    validated = json.loads(marker.read_text()) if marker.exists() else None
-    if validated != expected:
-        print("Checking patched Settings TypeScript before the full browser build", flush=True)
+    checks = [("native-shell-compile.json", "obj/chrome/installer/util/with_no_strings/shell_util.obj"),
+              ("settings-typecheck.json", "chrome/browser/resources/settings:build_ts")]
+    for filename, target in checks:
+        marker = root / filename
+        expected = {"patch_digest": patch_digest, "target": target}
+        validated = json.loads(marker.read_text()) if marker.exists() else None
+        if validated == expected:
+            continue
+        remaining = int(deadline - time.monotonic())
+        if remaining <= 0:
+            return 124
+        print(f"Checking patched target before the full browser build: {target}", flush=True)
         preflight = [f"--target={target}" if str(part).startswith("--target=") else part for part in command]
-        result = timed_run(preflight, root / "src/brave", max(1, int(deadline - time.monotonic())))
+        result = timed_run(preflight, root / "src/brave", remaining)
         if result != 0:
             return result
         marker.write_text(json.dumps(expected), encoding="utf-8")

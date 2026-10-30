@@ -1,6 +1,6 @@
-From e067fa18f347033d855021c5ff5b01bbd2c3bb52 Mon Sep 17 00:00:00 2001
-From: Loukious <24696530+Loukious@users.noreply.github.com>
-Date: Fri, 2 Oct 2026 15:22:39 +0100
+From 7edc8cc7678afc6320d7a0a13ab6478d83334ed5 Mon Sep 17 00:00:00 2001
+From: Brave Chrome Sync build <build@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 10:06:20 +0100
 Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
 
 ---
@@ -9,8 +9,7 @@ Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
  browser/brave_prefs_browsertest.cc            |  2 +-
  ...browser_context_keyed_service_factories.cc |  2 -
  .../resources/settings/br/page_visibility.ts  |  4 +-
- .../resources/settings/br/settings_main.ts    | 16 ----
- .../resources/settings/br/settings_menu.ts    | 13 +---
+ .../resources/settings/br/settings_main.ts    | 15 ----
  browser/resources/settings/brave_routes.ts    |  7 --
  .../views/profiles/brave_profile_menu_view.cc |  3 +-
  browser/ui/webui/brave_settings_ui.cc         |  2 -
@@ -21,6 +20,7 @@ Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
  .../people_page.html.ts.lit_mangler.ts        | 77 +------------------
  .../settings/people_page/people_page.ts       | 26 +------
  .../people_page/sync_account_control.ts       | 37 +--------
+ .../settings_menu.html.lit_mangler.ts         |  7 +-
  .../browser/signin/chrome_signin_helper.cc    |  7 --
  .../browser/signin/signin_promo_unittest.cc   | 75 ------------------
  .../browser/sync/sync_service_factory.cc      | 15 +---
@@ -51,7 +51,7 @@ Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
  .../chrome-browser-ui-chrome_pages.cc.patch   | 13 ----
  ...i-tabs-recent_tabs_sub_menu_model.cc.patch |  9 ---
  ...-ui-webui-settings-people_handler.cc.patch | 28 -------
- ...ignin-public-base-signin_switches.cc.patch | 20 +----
+ ...ignin-public-base-signin_switches.cc.patch | 16 ----
  .../components-sync-base-features.cc.patch    | 21 -----
  ...ts-sync-service-sync_auth_manager.cc.patch | 16 ----
  .../browser/signin/signin_promo_util.cc.yaml  | 32 --------
@@ -61,7 +61,7 @@ Subject: [PATCH] Restore Chromium Google sign-in and Sync paths
  .../sync/service/sync_auth_manager.cc.yaml    | 29 -------
  test/filters/components_unittests.filter      | 12 ---
  test/filters/unit_tests.filter                |  2 -
- 57 files changed, 29 insertions(+), 1083 deletions(-)
+ 57 files changed, 28 insertions(+), 1073 deletions(-)
  delete mode 100644 patches/chrome-browser-resources-settings-people_page-sync_controls.ts.patch
  delete mode 100644 patches/chrome-browser-signin-chrome_signin_helper.cc.patch
  delete mode 100644 patches/chrome-browser-signin-signin_promo_util.cc.patch
@@ -130,7 +130,7 @@ index 4eaf52fa4..7b54eae50 100644
    if (!base::FeatureList::IsEnabled(brave_sync::features::kBraveSync)) {
      // Disable sync temporarily
 diff --git a/browser/brave_content_browser_client.cc b/browser/brave_content_browser_client.cc
-index 866e4b33c..d1170b2b1 100644
+index 70066b86a..ad10e6bec 100644
 --- a/browser/brave_content_browser_client.cc
 +++ b/browser/brave_content_browser_client.cc
 @@ -114,6 +114,7 @@
@@ -141,7 +141,7 @@ index 866e4b33c..d1170b2b1 100644
  #include "chrome/grit/branded_strings.h"
  #include "components/content_settings/browser/page_specific_content_settings.h"
  #include "components/content_settings/core/browser/host_content_settings_map.h"
-@@ -1477,12 +1478,12 @@ bool BraveContentBrowserClient::HandleURLOverrideRewrite(
+@@ -1535,12 +1536,12 @@ bool BraveContentBrowserClient::HandleURLOverrideRewrite(
      return false;
    }
  
@@ -157,7 +157,7 @@ index 866e4b33c..d1170b2b1 100644
      return true;
    }
 diff --git a/browser/brave_prefs_browsertest.cc b/browser/brave_prefs_browsertest.cc
-index 48ac9eec0..d838ec8c2 100644
+index a25559275..a2d5ca25c 100644
 --- a/browser/brave_prefs_browsertest.cc
 +++ b/browser/brave_prefs_browsertest.cc
 @@ -156,7 +156,7 @@ IN_PROC_BROWSER_TEST_F(BraveProfilePrefsBrowserTest,
@@ -190,7 +190,7 @@ index 99b56580e..131a87cce 100644
  #if BUILDFLAG(ENABLE_CONTAINERS)
    ContainersServiceFactory::GetInstance();
 diff --git a/browser/resources/settings/br/page_visibility.ts b/browser/resources/settings/br/page_visibility.ts
-index 70c14e778..75c6a34c2 100644
+index 83ea2376d..2c9779573 100644
 --- a/browser/resources/settings/br/page_visibility.ts
 +++ b/browser/resources/settings/br/page_visibility.ts
 @@ -92,13 +92,13 @@ function getPageVisibility () {
@@ -210,10 +210,10 @@ index 70c14e778..75c6a34c2 100644
      braveWallet: loadTimeData.getBoolean('isBraveWalletAllowed'),
      // </if>
 diff --git a/browser/resources/settings/br/settings_main.ts b/browser/resources/settings/br/settings_main.ts
-index bde992413..b773d41aa 100644
+index 4d2200dd4..a0f9ca778 100644
 --- a/browser/resources/settings/br/settings_main.ts
 +++ b/browser/resources/settings/br/settings_main.ts
-@@ -161,22 +161,6 @@ RegisterPolymerTemplateModifications({
+@@ -155,21 +155,6 @@ RegisterPolymerTemplateModifications({
        `)
      // </if>
  
@@ -225,7 +225,6 @@ index bde992413..b773d41aa 100644
 -            <template is="dom-if" if="[[renderPlugin_(
 -              routes_.BRAVE_SYNC, lastRoute_, inSearchMode_)]]">
 -              <settings-brave-sync-page-index
--                prefs="{{prefs}}"
 -                in-search-mode="[[inSearchMode_]]">
 -              </settings-brave-sync-page-index>
 -            </template>
@@ -236,32 +235,6 @@ index bde992413..b773d41aa 100644
      // Insert the extensions page into the view manager
      switcher.appendChild(
        html`
-diff --git a/browser/resources/settings/br/settings_menu.ts b/browser/resources/settings/br/settings_menu.ts
-index c17e6cd6f..23a5af8be 100644
---- a/browser/resources/settings/br/settings_menu.ts
-+++ b/browser/resources/settings/br/settings_menu.ts
-@@ -313,19 +313,10 @@ RegisterPolymerTemplateModifications({
-       lastInserted.insertAdjacentElement('afterend', leoAssistantEl)!
- // </if>
- 
--    // Add Sync item
--    const syncEl = createMenuElement(
--      loadTimeData.getString('braveSync'),
--      '/braveSync',
--      'product-sync',
--      'braveSync',
--    )
--    lastInserted = lastInserted.insertAdjacentElement('afterend', syncEl)!
--
-     // Add search item
-     const searchEl = getMenuElement(templateContent, '/search')
--    if (searchEl && syncEl) {
--      syncEl.insertAdjacentElement('afterend', searchEl)
-+    if (searchEl && lastInserted) {
-+      lastInserted.insertAdjacentElement('afterend', searchEl)
-     }
- 
-     // Add Extensions item
 diff --git a/browser/resources/settings/brave_routes.ts b/browser/resources/settings/brave_routes.ts
 index 075834e07..d9decc329 100644
 --- a/browser/resources/settings/brave_routes.ts
@@ -289,10 +262,7 @@ diff --git a/browser/ui/views/profiles/brave_profile_menu_view.cc b/browser/ui/v
 index 6a202f45e..4c30ef9ab 100644
 --- a/browser/ui/views/profiles/brave_profile_menu_view.cc
 +++ b/browser/ui/views/profiles/brave_profile_menu_view.cc
-@@ -51,7 +51,6 @@ void BraveProfileMenuView::MaybeBuildCloseBrowsersButton() {
-       vector_icons::kCloseOldIcon);
- }
- 
+@@ -54,4 +54,3 @@
 -// We don't want feature buttons to manage google account
  void BraveProfileMenuView::BuildFeatureButtons() {
 -  MaybeBuildCloseBrowsersButton();
@@ -612,6 +582,25 @@ index 85e37c436..d65e6719a 100644
 -    SettingsSyncAccountControlElement.is, SettingsSyncAccountControlElement)
 +    SettingsSyncAccountControlElement.is,
 +    SettingsSyncAccountControlElement)
+diff --git a/chromium_src/chrome/browser/resources/settings/settings_menu/settings_menu.html.lit_mangler.ts b/chromium_src/chrome/browser/resources/settings/settings_menu/settings_menu.html.lit_mangler.ts
+index 868a9b1b4..5f4b98357 100644
+--- a/chromium_src/chrome/browser/resources/settings/settings_menu/settings_menu.html.lit_mangler.ts
++++ b/chromium_src/chrome/browser/resources/settings/settings_menu/settings_menu.html.lit_mangler.ts
+@@ -59,11 +59,10 @@ mangle((root) => {
+   // Web3 and Leo are hidden by `pageVisibility` when disallowed.
+   insertAfter(getById(root, 'privacy'),
+     menuItem('braveWallet', '/web3', 'product-brave-wallet', 'braveWeb3')
+-    + menuItem('leoAssistant', '/leo-ai', 'product-brave-leo', 'leoAssistant')
+-    + menuItem('braveSync', '/braveSync', 'product-sync', 'braveSync'))
++    + menuItem('leoAssistant', '/leo-ai', 'product-brave-leo', 'leoAssistant'))
+ 
+-  // Search and Extensions follow Sync.
+-  getById(root, 'braveSync').after(getById(root, 'search'))
++  // Search and Extensions follow Leo.
++  getById(root, 'leoAssistant').after(getById(root, 'search'))
+   insertAfter(getById(root, 'search'),
+     menuItem('extensions', '/extensions', 'browser-extensions',
+              'braveDefaultExtensions'))
 diff --git a/chromium_src/chrome/browser/signin/chrome_signin_helper.cc b/chromium_src/chrome/browser/signin/chrome_signin_helper.cc
 index e125b969c..c03dea62f 100644
 --- a/chromium_src/chrome/browser/signin/chrome_signin_helper.cc
@@ -1403,15 +1392,15 @@ index 1501a188f..000000000
 -     // Toggles should be disabled on the account settings page if sync is
 diff --git a/patches/chrome-browser-signin-chrome_signin_helper.cc.patch b/patches/chrome-browser-signin-chrome_signin_helper.cc.patch
 deleted file mode 100644
-index cf3590cf4..000000000
+index 3540e7a62..000000000
 --- a/patches/chrome-browser-signin-chrome_signin_helper.cc.patch
 +++ /dev/null
 @@ -1,12 +0,0 @@
 -diff --git a/chrome/browser/signin/chrome_signin_helper.cc b/chrome/browser/signin/chrome_signin_helper.cc
--index fbe55461f21ab94b69072bab686341537e85f688..6b547df9dfde66bc01f6cff27a801e6a3131fc96 100644
+-index 0dc05a33384f83c42dd3d8e1ee866438ff35e89a..c97675de829e72a8b47429d411040cf1a8fd5f4e 100644
 ---- a/chrome/browser/signin/chrome_signin_helper.cc
 -+++ b/chrome/browser/signin/chrome_signin_helper.cc
--@@ -250,6 +250,7 @@ void ProcessMirrorHeader(
+-@@ -269,6 +269,7 @@ void ProcessMirrorHeader(
 -   // Do not allow non-Google origins to open incognito windows.
 -   // TODO(crbug.com/40064889): Expand this check to all Mirror headers,
 -   //                          regardless of `service_type`.
@@ -1421,15 +1410,15 @@ index cf3590cf4..000000000
 -         request_initiator ? request_initiator->GetURL() : GURL();
 diff --git a/patches/chrome-browser-signin-signin_promo_util.cc.patch b/patches/chrome-browser-signin-signin_promo_util.cc.patch
 deleted file mode 100644
-index 1a0f0fa82..000000000
+index f157cdcf7..000000000
 --- a/patches/chrome-browser-signin-signin_promo_util.cc.patch
 +++ /dev/null
 @@ -1,31 +0,0 @@
 -diff --git a/chrome/browser/signin/signin_promo_util.cc b/chrome/browser/signin/signin_promo_util.cc
--index ed650438b7855aaa980902bb4fe77c322e99f30d..e74fcc1b0bcb20d40085dfd6c5e9474caf78af2a 100644
+-index 7f91eb37572aa7970c09a39a4c7ede81a22369cc..02e0fdb6dd79a9a10d0cc80a3471b748ee8b2a38 100644
 ---- a/chrome/browser/signin/signin_promo_util.cc
 -+++ b/chrome/browser/signin/signin_promo_util.cc
--@@ -659,6 +659,7 @@ bool CanShowPromoForSyncableDataType(SignInPromoType type, Profile& profile) {
+-@@ -632,6 +632,7 @@ bool CanShowPromoForSyncableDataType(SignInPromoType type, Profile& profile) {
 - // Needs additional checks depending on the type of the promo.
 - // `profile` is the profile of the tab the promo would be shown on.
 - bool ShouldShowSignInPromoCommon(Profile& profile, SignInPromoType type) {
@@ -1437,7 +1426,7 @@ index 1a0f0fa82..000000000
 -   if (profile.IsOffTheRecord()) {
 -     return false;
 -   }
--@@ -715,6 +716,7 @@ bool ShouldShowSignInPromoCommon(Profile& profile, SignInPromoType type) {
+-@@ -688,6 +689,7 @@ bool ShouldShowSignInPromoCommon(Profile& profile, SignInPromoType type) {
 - #if BUILDFLAG(ENABLE_EXTENSIONS)
 - bool ShouldShowExtensionSignInPromo(Profile& profile,
 -                                     const extensions::Extension& extension) {
@@ -1445,7 +1434,7 @@ index 1a0f0fa82..000000000
 - #if BUILDFLAG(ENABLE_DICE_SUPPORT)
 -   if (!extensions::sync_util::ShouldSync(&profile, &extension)) {
 -     return false;
--@@ -1030,6 +1032,10 @@ void ComputeProfileMenuAvatarButtonPromoInfo(
+-@@ -984,6 +986,10 @@ void ComputeProfileMenuAvatarButtonPromoInfo(
 -     Profile& profile,
 -     base::OnceCallback<void(ProfileMenuAvatarButtonPromoInfo)> result_callback,
 -     bool allow_batch_upload_promos) {
@@ -1458,15 +1447,15 @@ index 1a0f0fa82..000000000
 -   if (!batch_upload) {
 diff --git a/patches/chrome-browser-ui-chrome_pages.cc.patch b/patches/chrome-browser-ui-chrome_pages.cc.patch
 deleted file mode 100644
-index 130fe2e61..000000000
+index 85cc29755..000000000
 --- a/patches/chrome-browser-ui-chrome_pages.cc.patch
 +++ /dev/null
 @@ -1,13 +0,0 @@
 -diff --git a/chrome/browser/ui/chrome_pages.cc b/chrome/browser/ui/chrome_pages.cc
--index e70ee6412075fd190f0591b738804623939635d2..5fbe02522fa9a36b4cf1d7ef83eefd32cc21c115 100644
+-index 3f270ac926d1f76db66a3ee5bf41799b726f3293..da2effbd84241bba06e4282ff2c78df66281d3fc 100644
 ---- a/chrome/browser/ui/chrome_pages.cc
 -+++ b/chrome/browser/ui/chrome_pages.cc
--@@ -437,7 +437,7 @@ void ShowSlow(BrowserWindowInterface* browser) {
+-@@ -434,7 +434,7 @@ void ShowSlow(BrowserWindowInterface* browser) {
 - #endif
 - }
 - 
@@ -1476,14 +1465,14 @@ index 130fe2e61..000000000
 - }
 - 
 diff --git a/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch b/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch
-index 4580c3a2d..e4d9b5ff6 100644
+index 996829432..a73b3bea0 100644
 --- a/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch
 +++ b/patches/chrome-browser-ui-tabs-recent_tabs_sub_menu_model.cc.patch
 @@ -2,15 +2,6 @@ diff --git a/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc b/chrome/brows
- index 96269a9aea8c8947fb1d7a2f1e18d416e59fe568..80e7cc7b86edf10e38826be1ead9ab4843be3a77 100644
+ index 9f467ba218f62d82f72194a9daa329257060abfa..422e3ed33283b5b341bd6d2e159ff630a6bad511 100644
  --- a/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc
  +++ b/chrome/browser/ui/tabs/recent_tabs_sub_menu_model.cc
--@@ -580,7 +580,7 @@ void RecentTabsSubMenuModel::BuildTabsFromOtherDevices() {
+-@@ -524,7 +524,7 @@ void RecentTabsSubMenuModel::BuildTabsFromOtherDevices() {
 -   std::vector<raw_ptr<const sync_sessions::SyncedSession, VectorExperimental>>
 -       sessions;
 -   if (!open_tabs || !open_tabs->GetAllForeignSessions(&sessions)) {
@@ -1492,17 +1481,17 @@ index 4580c3a2d..e4d9b5ff6 100644
 -       AddItemWithStringId(IDC_RECENT_TABS_NO_DEVICE_TABS,
 -                           IDS_RECENT_TABS_NO_DEVICE_TABS);
 -     } else if (syncer::IsReplaceSyncPromosWithSignInPromosEnabled()) {
- @@ -623,6 +623,8 @@ void RecentTabsSubMenuModel::BuildTabsFromOtherDevices() {
+ @@ -567,6 +567,8 @@ void RecentTabsSubMenuModel::BuildTabsFromOtherDevices() {
       DCHECK(!session->GetSessionName().empty());
       std::unique_ptr<ui::SimpleMenuModel> device_menu_model =
 diff --git a/patches/chrome-browser-ui-webui-settings-people_handler.cc.patch b/patches/chrome-browser-ui-webui-settings-people_handler.cc.patch
 deleted file mode 100644
-index e7110f5ac..000000000
+index 695c0bf01..000000000
 --- a/patches/chrome-browser-ui-webui-settings-people_handler.cc.patch
 +++ /dev/null
 @@ -1,28 +0,0 @@
 -diff --git a/chrome/browser/ui/webui/settings/people_handler.cc b/chrome/browser/ui/webui/settings/people_handler.cc
--index 1169a401e01a6140d010995d3da68db9ba772580..8b41106dc9034c49ffa6a95d392dd4238ca35a55 100644
+-index 92a7cbc0971859d21640b4fcd9dc24d04e35e336..5b89b8093bea40c4cb40a898c75d1063754027bb 100644
 ---- a/chrome/browser/ui/webui/settings/people_handler.cc
 -+++ b/chrome/browser/ui/webui/settings/people_handler.cc
 -@@ -1169,6 +1169,7 @@ void PeopleHandler::OnSyncShutdown(syncer::SyncService* sync_service) {
@@ -1530,26 +1519,15 @@ index e7110f5ac..000000000
 -              signin::ConsentLevel::kSync) ||
 -          SigninErrorControllerFactory::GetForProfile(profile_)->HasError();
 diff --git a/patches/components-signin-public-base-signin_switches.cc.patch b/patches/components-signin-public-base-signin_switches.cc.patch
-index 891496e93..ff0fb6ad2 100644
+index 351960ff1..e86684b48 100644
 --- a/patches/components-signin-public-base-signin_switches.cc.patch
 +++ b/patches/components-signin-public-base-signin_switches.cc.patch
-@@ -1,8 +1,8 @@
- diff --git a/components/signin/public/base/signin_switches.cc b/components/signin/public/base/signin_switches.cc
--index e2d674d22c1211b6531c2c50c0929d163e22cec3..a4b931e4e980948f1aeee815794336be1805a2b6 100644
-+index 9b5c0e17950f56fcd5643fd5de35640af5132df3..f5068e22fdcfa34227bb4beb88a3870d814ddaad 100644
- --- a/components/signin/public/base/signin_switches.cc
- +++ b/components/signin/public/base/signin_switches.cc
--@@ -631,9 +631,9 @@ BASE_FEATURE(kFirstRunDesktopChoiceScreenRefresh,
-+@@ -675,9 +675,9 @@ BASE_FEATURE(kFirstRunDesktopChoiceScreenRefresh,
+@@ -32,19 +32,3 @@ index 00f7590fe4da83bf478e60b07a19a6f3c9106aac..cd91388648c91e6bb7f00ee28cbfa401
+  #endif  // BUILDFLAG(IS_ANDROID)
   
   #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
-  #if BUILDFLAG(IS_WIN)
-@@ -14,19 +14,3 @@ index e2d674d22c1211b6531c2c50c0929d163e22cec3..a4b931e4e980948f1aeee815794336be
-  #endif
-  bool IsFirstRunDesktopRefreshEnabled(bool is_in_search_engine_choice_region) {
-    if (is_in_search_engine_choice_region &&
--@@ -916,13 +916,8 @@ BASE_FEATURE(kSupportWebSigninAddSession, base::FEATURE_ENABLED_BY_DEFAULT);
-- BASE_FEATURE(kSwitchToIncognitoInSettings, base::FEATURE_DISABLED_BY_DEFAULT);
+-@@ -948,13 +948,8 @@ BASE_FEATURE(kSupportWebSigninAddSession, base::FEATURE_ENABLED_BY_DEFAULT);
+- BASE_FEATURE(kSwitchToIncognitoInSettings, base::FEATURE_ENABLED_BY_DEFAULT);
 - #endif  // BUILDFLAG(IS_ANDROID)
 - 
 --BASE_FEATURE(kSyncEnableBookmarksInTransportMode,
@@ -1566,15 +1544,15 @@ index 891496e93..ff0fb6ad2 100644
 - BASE_FEATURE(kUndoChromeOsUseConsentLevelSignin,
 diff --git a/patches/components-sync-base-features.cc.patch b/patches/components-sync-base-features.cc.patch
 deleted file mode 100644
-index 61abe2ead..000000000
+index bd6cf0054..000000000
 --- a/patches/components-sync-base-features.cc.patch
 +++ /dev/null
 @@ -1,21 +0,0 @@
 -diff --git a/components/sync/base/features.cc b/components/sync/base/features.cc
--index 6895a419abb73370cd15425d8c5c53ab62e85467..37cf1156c0e37d6b720ed9217ec131bac0be43a8 100644
+-index 30189260296b809e1819182a187053d04acf41b9..8e012ffc609d5ee178b8f72b3986e35e90ffe3ae 100644
 ---- a/components/sync/base/features.cc
 -+++ b/components/sync/base/features.cc
--@@ -89,6 +89,7 @@ BASE_FEATURE(kReplaceSyncPromosWithSigninPromosNewSignin,
+-@@ -88,6 +88,7 @@ BASE_FEATURE(kReplaceSyncPromosWithSigninPromosNewSignin,
 - );
 - 
 - bool IsReplaceSyncPromosWithSignInPromosEnabled() {
@@ -1582,7 +1560,7 @@ index 61abe2ead..000000000
 -   return base::FeatureList::IsEnabled(kReplaceSyncPromosWithSignInPromos) ||
 -          base::FeatureList::IsEnabled(
 -              kReplaceSyncPromosWithSigninPromosNewSignin);
--@@ -118,7 +119,7 @@ DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAccountSettings);
+-@@ -117,7 +118,7 @@ DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAccountSettings);
 - DEFINE_SYNC_AUTOFILL_AI_FEATURE(kSyncAutofillValuable);
 - #endif
 - 
@@ -1676,18 +1654,21 @@ index 0e0e0340c..9f3d7b391 100644
        Append a "more tabs" stub item when a device has more tabs than shown.
      regex:
 diff --git a/rewrite/components/signin/public/base/signin_switches.cc.yaml b/rewrite/components/signin/public/base/signin_switches.cc.yaml
-index ddb75adbc..41d5b035b 100644
+index 772e16d1c..c2b0bb31c 100644
 --- a/rewrite/components/signin/public/base/signin_switches.cc.yaml
 +++ b/rewrite/components/signin/public/base/signin_switches.cc.yaml
-@@ -15,8 +15,3 @@ substitutions:
-     set_feature_flag_default_state:
+@@ -16,11 +16,6 @@ substitutions:
        feature_name: kFirstRunDesktopRefresh
        value: base::FEATURE_DISABLED_BY_DEFAULT
--
+ 
 -  - description: 'Ship kSyncEnableBookmarksInTransportMode disabled.'
 -    set_feature_flag_default_state:
 -      feature_name: kSyncEnableBookmarksInTransportMode
 -      value: base::FEATURE_DISABLED_BY_DEFAULT
+-
+   - description: |-
+       Ship kProfileDiscOnAllPages disabled.
+ 
 diff --git a/rewrite/components/sync/base/features.cc.yaml b/rewrite/components/sync/base/features.cc.yaml
 deleted file mode 100644
 index 1308ae715..000000000
@@ -1761,10 +1742,10 @@ index b9880f8a2..000000000
 -          return;
 -        }
 diff --git a/test/filters/components_unittests.filter b/test/filters/components_unittests.filter
-index 9c5b13d8a..5c025fecf 100644
+index 724e7a913..bcf3f5d8b 100644
 --- a/test/filters/components_unittests.filter
 +++ b/test/filters/components_unittests.filter
-@@ -89,18 +89,6 @@
+@@ -98,18 +98,6 @@
  # These tests fail because we disable commerce::kShoppingList
  -All/ShoppingServiceTest.TestShoppingList*/*
  
@@ -1784,7 +1765,7 @@ index 9c5b13d8a..5c025fecf 100644
  -SearchEngineChoiceEligibilityTest.ChoiceScreenConditions_SkipFor3p_Waffle
  
 diff --git a/test/filters/unit_tests.filter b/test/filters/unit_tests.filter
-index 185529299..075c7fb67 100644
+index d1d070744..506a4a0d1 100644
 --- a/test/filters/unit_tests.filter
 +++ b/test/filters/unit_tests.filter
 @@ -97,8 +97,6 @@

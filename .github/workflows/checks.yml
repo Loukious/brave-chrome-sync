@@ -67,18 +67,24 @@ jobs:
           python-version: '3.13'
       - name: Check generated job graph
         run: python scripts/generate_workflow.py --check
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.x'
+      - name: Install locked Settings DOM test dependencies
+        run: npm ci --prefix tests/ui --ignore-scripts --no-audit --no-fund
       - name: Check release selection and fail-closed publishing
         run: python -m unittest discover -s tests -v
       - name: Check updater installation and failure recovery offline
         shell: pwsh
         run: ./tests/updater.test.ps1
-      - name: Replay original patch set
+      - name: Replay patches against the maintained base
         shell: bash
         run: |
           tag=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_tag"])')
           sha=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_commit"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/base-check" --tag "$tag" --sha "$sha" --patch-only
           python tests/check_native_shell_patch.py "$RUNNER_TEMP/base-check/src/brave"
+          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/base-check/src/brave"
       - name: Replay patches against the newest configured upstream
         shell: bash
         env:
@@ -89,3 +95,4 @@ jobs:
           sha=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_sha"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/latest-check" --tag "$tag" --sha "$sha" --patch-only
           python tests/check_native_shell_patch.py "$RUNNER_TEMP/latest-check/src/brave"
+          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/latest-check/src/brave"

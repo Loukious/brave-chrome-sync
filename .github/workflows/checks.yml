@@ -79,6 +79,8 @@ jobs:
           sha=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_commit"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/base-check" --tag "$tag" --sha "$sha" --patch-only
           python tests/check_native_shell_patch.py "$RUNNER_TEMP/base-check/src/brave"
+      - name: Replay patches against the profile-menu regression release
+        run: python scripts/prepare.py --root "$RUNNER_TEMP/profile-menu-check" --tag v1.101.2 --sha ea6f1ff3d1ab2bb56f1a58e2cb9b701f362b0e05 --patch-only
       - name: Replay patches against the newest configured upstream
         shell: bash
         env:

@@ -289,10 +289,7 @@ diff --git a/browser/ui/views/profiles/brave_profile_menu_view.cc b/browser/ui/v
 index 6a202f45e..4c30ef9ab 100644
 --- a/browser/ui/views/profiles/brave_profile_menu_view.cc
 +++ b/browser/ui/views/profiles/brave_profile_menu_view.cc
-@@ -51,7 +51,6 @@ void BraveProfileMenuView::MaybeBuildCloseBrowsersButton() {
-       vector_icons::kCloseOldIcon);
- }
- 
+@@ -54,4 +54,3 @@
 -// We don't want feature buttons to manage google account
  void BraveProfileMenuView::BuildFeatureButtons() {
 -  MaybeBuildCloseBrowsersButton();

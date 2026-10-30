@@ -141,7 +141,12 @@ checkpoint is retained during recovery.
 Each source revision compiles the patched native Windows shell integration object,
 then type-checks the Settings UI, before building the complete browser. These
 results survive stage checkpoints, and all three phases share one stage time
-budget. Pull requests replay patches against the pinned base and newest upstream.
+budget. Pull requests replay patches against the pinned base, the v1.101.2
+profile-menu regression release, and newest upstream. Profile-menu patch tests
+also change the neighboring icon and function body to ensure unrelated Brave
+UI changes do not break the Google account hook. Changes to the hook itself
+still fail patch validation and require review; new upstream conflicts cannot
+be ruled out while following Nightly.
 The native registration smoke test uses Chromium's real Windows header wrapper
 and macro guards, catching Windows SDK macro collisions before browser builds.
 

@@ -85,6 +85,15 @@ jobs:
           UPSTREAM_TAG: ${{ needs.detect.outputs.upstream_tag }}
           UPSTREAM_SHA: ${{ needs.detect.outputs.upstream_sha }}
         run: python scripts/prepare.py --root "$RUNNER_TEMP/patch-check" --tag "$UPSTREAM_TAG" --sha "$UPSTREAM_SHA" --patch-only
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.x'
+      - name: Install locked Settings DOM test dependencies
+        run: npm ci --prefix tests/ui --ignore-scripts --no-audit --no-fund
+      - name: Validate native hooks and Settings navigation on selected source
+        run: |
+          python tests/check_native_shell_patch.py "$RUNNER_TEMP/patch-check/src/brave"
+          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/patch-check/src/brave"
   prepare:
     needs: [detect, patches, extension-service]
     uses: ./.github/workflows/windows-stage.yml

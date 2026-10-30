@@ -7,7 +7,7 @@ distribution.
 
 The source checkout used to create the patches was Brave Nightly **v1.99.8**
 (`9cc0476e9506f93ff6921b0afed668d048f07313`). All four local commits are
-preserved in `patches/series`, including the Windows patch-parser and Wintun
+maintained in `patches/series`, including the Windows patch-parser and Wintun
 build fixes. The fifth and sixth patches add GitHub updates to the Windows
 browser in both release and local build configurations. The seventh lets this
 independent release build omit unused Brave backend keys.
@@ -19,6 +19,10 @@ The tenth registers taskbar windows with the installer's application identity
 and launches pinned windows through the stable launcher.
 Google credentials and local browser profiles are excluded. The Brave client
 service key is supplied through an Actions secret and compiled into the browser.
+
+The current patch base and minimum automatically selected source is **v1.101.7**
+(Chromium 157). Patch 0001 follows its Lit Settings menu and updated Chromium
+patch references; earlier patch revisions remain available in Git history.
 
 ## Automated builds
 
@@ -141,12 +145,15 @@ checkpoint is retained during recovery.
 Each source revision compiles the patched native Windows shell integration object,
 then type-checks the Settings UI, before building the complete browser. These
 results survive stage checkpoints, and all three phases share one stage time
-budget. Pull requests replay patches against the pinned base, the v1.101.2
-profile-menu regression release, and newest upstream. Profile-menu patch tests
+budget. Pull requests replay patches against the maintained base and newest
+upstream. Profile-menu patch tests
 also change the neighboring icon and function body to ensure unrelated Brave
 UI changes do not break the Google account hook. Changes to the hook itself
 still fail patch validation and require review; new upstream conflicts cannot
 be ruled out while following Nightly.
+The Settings DOM test executes the maintained Lit menu override on the matching
+Chromium template, checking that the Google account entry survives and Search
+and Extensions remain reachable without the Brave Sync menu.
 The native registration smoke test uses Chromium's real Windows header wrapper
 and macro guards, catching Windows SDK macro collisions before browser builds.
 

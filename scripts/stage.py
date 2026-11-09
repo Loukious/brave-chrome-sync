@@ -11,7 +11,7 @@ import urllib.request
 import zipfile
 from datetime import datetime, timezone
 
-from prepare import run
+from prepare import run, source_root, validate_layout
 from upstream import ROOT, digest
 from package_windows import package_browser, google_configuration
 from checkpoint import create_archive, verify_wasm_vendor, verify_checkpoint, extract_archive
@@ -44,14 +44,14 @@ def compile_checked(command, root, seconds, patch_digest):
             return 124
         print(f"Checking patched target before the full browser build: {target}", flush=True)
         preflight = [f"--target={target}" if str(part).startswith("--target=") else part for part in command]
-        result = timed_run(preflight, root / "src/brave", remaining)
+        result = timed_run(preflight, source_root(root) / "brave", remaining)
         if result != 0:
             return result
         marker.write_text(json.dumps(expected), encoding="utf-8")
     remaining = int(deadline - time.monotonic())
     if remaining <= 0:
         return 124
-    return timed_run(command, root / "src/brave", remaining)
+    return timed_run(command, source_root(root) / "brave", remaining)
 
 
 def compile_budget(maximum_seconds, deadline="", now=None):
@@ -76,10 +76,11 @@ def output(key, value):
 
 
 def snapshot(root, checkpoint):
+    validate_layout(root)
     checkpoint.mkdir(parents=True, exist_ok=True)
     # tar preserves hidden files, timestamps and pnpm symlinks. Keeping the whole
     # initialized tree avoids touching inputs and recompiling everything next job.
-    verify_wasm_vendor(root / "src/brave")
+    verify_wasm_vendor(source_root(root) / "brave")
     create_archive(root, checkpoint / "state.tar.gz")
 
 
@@ -88,7 +89,8 @@ def restore(root, checkpoint, allow_legacy=False):
         raise ValueError(f"Refusing to restore over existing build tree: {root}")
     verify_checkpoint(checkpoint / "state.tar.gz", allow_legacy=allow_legacy, restore_root=root)
     extract_archive(checkpoint / "state.tar.gz", root)
-    verify_wasm_vendor(root / "src/brave")
+    validate_layout(root)
+    verify_wasm_vendor(source_root(root) / "brave")
     # The downloaded checkpoint is disposable input inside this repository's
     # CI workspace; it is not a compiler cache or build output directory.
     (checkpoint / "state.tar.gz").unlink()
@@ -96,12 +98,12 @@ def restore(root, checkpoint, allow_legacy=False):
 
 
 def package(root, dist, tag, sha, release_tag, channel):
-    check_build_key(root / "src/out/Sync")
-    target = root / "src/brave"
+    check_build_key(source_root(root) / "out/Sync")
+    target = source_root(root) / "brave"
     package_json = json.loads((target / "package.json").read_text())
     extension_service = check_service(tag, package_json["config"]["projects"]["chrome"]["tag"])
     dist.mkdir(parents=True, exist_ok=True)
-    candidates = list((root / "src/out/Sync/dist").glob("*.zip"))
+    candidates = list((source_root(root) / "out/Sync/dist").glob("*.zip"))
     if len(candidates) != 1:
         raise ValueError(f"Expected one browser archive, found: {candidates}")
     destination, installer = package_browser(candidates[0], dist, release_tag, channel,
@@ -268,7 +270,7 @@ def main():
     seconds = compile_budget(config["compile_minutes"] * 60, os.environ.get("BUILD_JOB_DEADLINE", ""))
     result = compile_checked(command, root, seconds, marker["patch_digest"])
     if result == 124:
-        output_dir = root / "src/out/Sync"
+        output_dir = source_root(root) / "out/Sync"
         if (output_dir / "gn_gen.guard").exists() or not (output_dir / "build.ninja").exists():
             raise RuntimeError("GN generation did not finish within this stage; cannot resume compilation")
         # Brave cleans non-production CI builds when this sentinel survives an

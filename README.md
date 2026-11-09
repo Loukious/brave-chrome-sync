@@ -20,8 +20,8 @@ and launches pinned windows through the stable launcher.
 Google credentials and local browser profiles are excluded. The Brave client
 service key is supplied through an Actions secret and compiled into the browser.
 
-The current patch base and minimum automatically selected source is **v1.101.7**
-(Chromium 157). Patch 0001 follows its Lit Settings menu and updated Chromium
+The current patch base and minimum automatically selected source is **v1.101.35**
+(Chromium 158). Patch 0001 follows its Lit Settings menu/main page and updated Chromium
 patch references; earlier patch revisions remain available in Git history.
 
 ## Automated builds
@@ -80,8 +80,12 @@ build process tree, including children whose parents already exited. The stage
 archives only after all children stop; a stuck process causes a failure instead
 of a checkpoint containing files that are still being written.
 
-Compilation output is retained between stages at the same `D:\b` path, including
-source timestamps and pnpm symlinks, so later jobs can continue the build.
+The checkpoint workspace stays at `D:\b`. The gclient checkout lives at
+`D:\b\checkout`, with Git and tool caches under the sibling `D:\b\cache`.
+This keeps the Git cache outside the checkout as depot_tools requires, while
+preserving both together across stages, including Git object references,
+source timestamps and pnpm symlinks. Windows and Linux tests restore a real
+Git checkout that borrows objects from this cache and verify it with `git fsck`.
 Checkpoints use PAX format to preserve subsecond timestamps; Windows tar's
 default format rounds them to whole seconds. Each compilation stage also uploads
 Siso's rebuild explanations and metrics as a small diagnostic artifact.
@@ -151,9 +155,10 @@ also change the neighboring icon and function body to ensure unrelated Brave
 UI changes do not break the Google account hook. Changes to the hook itself
 still fail patch validation and require review; new upstream conflicts cannot
 be ruled out while following Nightly.
-The Settings DOM test executes the maintained Lit menu override on the matching
-Chromium template, checking that the Google account entry survives and Search
-and Extensions remain reachable without the Brave Sync menu.
+The Settings DOM tests execute the maintained menu override and Brave's actual
+main-page Lit mangler on matching Chromium templates. They check that the Google
+account entry/view survives, Search and Extensions remain reachable, and the
+Brave Sync menu/view is absent.
 The native registration smoke test uses Chromium's real Windows header wrapper
 and macro guards, catching Windows SDK macro collisions before browser builds.
 

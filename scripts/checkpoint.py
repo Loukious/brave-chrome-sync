@@ -70,7 +70,7 @@ def checkpoint_filter(member, destination):
             base = (root / member.name).parent if member.issym() else root
             member = member.replace(linkname=os.path.relpath(target, base), deep=False)
         elif member.issym() and member.pax_headers.get("LIBARCHIVE.symlinktype") != "dir":
-            alias = re.fullmatch(r"(?:\./)?src/out/Sync/siso\.exe(?:\.\d+)?\.(INFO|WARNING|ERROR|FATAL)", member.name)
+            alias = re.fullmatch(r"(?:\./)?(?:checkout/)?src/out/Sync/siso\.exe(?:\.\d+)?\.(INFO|WARNING|ERROR|FATAL)", member.name)
             temporary = [tempfile.gettempdir(), *[os.environ.get(key) for key in ("TEMP", "TMP", "RUNNER_TEMP")]]
             if os.name == "nt":
                 temporary.append(str(Path.home() / "AppData/Local/Temp"))

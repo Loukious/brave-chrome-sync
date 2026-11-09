@@ -15,6 +15,17 @@ def run(*args, cwd=None):
     subprocess.run(list(map(str, args)), cwd=cwd, check=True)
 
 
+def source_root(root):
+    return root / "checkout/src"
+
+
+def validate_layout(root):
+    checkout_root = source_root(root).parent.resolve()
+    cache = (root / "cache").resolve()
+    if cache.is_relative_to(checkout_root) or checkout_root.is_relative_to(cache):
+        raise ValueError("Git cache must be outside the gclient checkout")
+
+
 def checkout(target, tag, sha, source=None):
     if target.exists():
         raise ValueError(f"Checkout already exists; refusing to overwrite: {target}")
@@ -39,6 +50,7 @@ def checkout(target, tag, sha, source=None):
 
 
 def write_environment(target, root):
+    validate_layout(root)
     environment = {
         "use_brave_hermetic_toolchain": False,
         "is_brave_release_build": 1,
@@ -64,7 +76,8 @@ def main():
     parser.add_argument("--patch-only", action="store_true")
     args = parser.parse_args()
     root = args.root.resolve()
-    target = root / "src/brave"
+    validate_layout(root)
+    target = source_root(root) / "brave"
     checkout(target, args.tag, args.sha, args.source)
     if args.patch_only:
         return

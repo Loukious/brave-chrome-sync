@@ -52,16 +52,18 @@ class CheckpointTests(unittest.TestCase):
             logs.mkdir()
             target = logs / "siso.exe.runner.host.log.INFO.20261021-010000.1234"
             with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as stream:
-                for alias in ["siso.exe.INFO", "siso.exe.0.INFO", "siso.exe.9.INFO"]:
-                    member = tarfile.TarInfo("./src/out/Sync/" + alias)
-                    member.type = tarfile.SYMTYPE
-                    member.linkname = str(target)
-                    member.pax_headers = {"LIBARCHIVE.symlinktype": "file"}
-                    stream.addfile(member)
+                for prefix in ["src", "checkout/src"]:
+                    for alias in ["siso.exe.INFO", "siso.exe.0.INFO", "siso.exe.9.INFO"]:
+                        member = tarfile.TarInfo(f"./{prefix}/out/Sync/" + alias)
+                        member.type = tarfile.SYMTYPE
+                        member.linkname = str(target)
+                        member.pax_headers = {"LIBARCHIVE.symlinktype": "file"}
+                        stream.addfile(member)
             with patch("checkpoint.tempfile.gettempdir", return_value=str(logs)):
                 verify_checkpoint(archive, allow_legacy=True, restore_root=root)
                 extract_archive(archive, root)
-            for alias in (root / "src/out/Sync").iterdir():
+            for alias in [*(root / "src/out/Sync").iterdir(),
+                          *(root / "checkout/src/out/Sync").iterdir()]:
                 self.assertTrue(alias.is_symlink())
                 self.assertTrue(os.readlink(alias).endswith(str(target)))
             self.assertFalse(target.exists())

@@ -24,6 +24,8 @@ jobs:
         run: dotnet run --project tests/updater/Updater.Tests.csproj -p:PublishSingleFile=false -p:PublishTrimmed=false
       - name: Check Windows checkpoint integrity and archive round trip
         run: python -m unittest discover -s tests -p test_checkpoint.py -v
+      - name: Verify external Git cache survives a Windows checkpoint
+        run: python -m unittest discover -s tests -p test_prepare_layout.py -v
       - name: Exercise interrupted checkpoint download and checksum failures
         run: python -m unittest discover -s tests -p test_download_checkpoint.py -v
       - name: Create a checkpoint spanning multiple download ranges
@@ -83,8 +85,9 @@ jobs:
           tag=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_tag"])')
           sha=$(python -c 'import json; print(json.load(open("config.json"))["patch_base_commit"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/base-check" --tag "$tag" --sha "$sha" --patch-only
-          python tests/check_native_shell_patch.py "$RUNNER_TEMP/base-check/src/brave"
-          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/base-check/src/brave"
+          python tests/check_native_shell_patch.py "$RUNNER_TEMP/base-check/checkout/src/brave"
+          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/base-check/checkout/src/brave"
+          node tests/ui/check_settings_main.mjs "$RUNNER_TEMP/base-check/checkout/src/brave"
       - name: Replay patches against the newest configured upstream
         shell: bash
         env:
@@ -94,5 +97,6 @@ jobs:
           tag=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_tag"])')
           sha=$(python -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/latest-upstream.json"))["upstream_sha"])')
           python scripts/prepare.py --root "$RUNNER_TEMP/latest-check" --tag "$tag" --sha "$sha" --patch-only
-          python tests/check_native_shell_patch.py "$RUNNER_TEMP/latest-check/src/brave"
-          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/latest-check/src/brave"
+          python tests/check_native_shell_patch.py "$RUNNER_TEMP/latest-check/checkout/src/brave"
+          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/latest-check/checkout/src/brave"
+          node tests/ui/check_settings_main.mjs "$RUNNER_TEMP/latest-check/checkout/src/brave"

@@ -8,6 +8,7 @@ import re
 import subprocess
 
 from upstream import ROOT, api
+from prepare import source_root
 
 
 def git_file(commit, path):
@@ -97,13 +98,13 @@ def apply_checkpoint_patches(root, commit):
         templates = []
         for name_in_patch in re.findall(r"(?m)^diff --git a/(\S+) b/\S+$", content):
             if name_in_patch.endswith(".html.ts.lit_mangler.ts"):
-                native = root / "src" / name_in_patch.removeprefix("chromium_src/").removesuffix(".lit_mangler.ts")
+                native = source_root(root) / name_in_patch.removeprefix("chromium_src/").removesuffix(".lit_mangler.ts")
                 if not native.is_file():
                     raise ValueError(f"Incremental template input does not exist: {native}")
                 templates.append(native)
         print(f"Replaying incremental browser fix: {name}", flush=True)
         subprocess.run(["git", "am", "--keep-cr", str(ROOT / "patches" / name)],
-                       cwd=root / "src/brave", check=True)
+                       cwd=source_root(root) / "brave", check=True)
         # A removed mangler is absent from Brave's normal override scan. Its
         # native input must still invalidate previously generated Settings HTML.
         for native in templates:

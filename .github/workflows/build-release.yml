@@ -92,8 +92,9 @@ jobs:
         run: npm ci --prefix tests/ui --ignore-scripts --no-audit --no-fund
       - name: Validate native hooks and Settings navigation on selected source
         run: |
-          python tests/check_native_shell_patch.py "$RUNNER_TEMP/patch-check/src/brave"
-          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/patch-check/src/brave"
+          python tests/check_native_shell_patch.py "$RUNNER_TEMP/patch-check/checkout/src/brave"
+          node tests/ui/check_settings_menu.mjs "$RUNNER_TEMP/patch-check/checkout/src/brave"
+          node tests/ui/check_settings_main.mjs "$RUNNER_TEMP/patch-check/checkout/src/brave"
   prepare:
     needs: [detect, patches, extension-service]
     uses: ./.github/workflows/windows-stage.yml

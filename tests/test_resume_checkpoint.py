@@ -26,7 +26,7 @@ class ResumeTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
             build_root = root / "build"
-            native = build_root / "src/chrome/browser/resources/settings/people_page/sync_controls.html.ts"
+            native = build_root / "checkout/src/chrome/browser/resources/settings/people_page/sync_controls.html.ts"
             native.parent.mkdir(parents=True)
             native.write_text("original Chromium template")
             os.utime(native, (1000, 1000))
@@ -63,7 +63,7 @@ class ResumeTests(unittest.TestCase):
                  patch("resume_checkpoint.ROOT", root), patch("resume_checkpoint.subprocess.run") as git:
                 apply_checkpoint_patches(Path("build"), "commit")
                 self.assertEqual(git.call_count, 1)
-                self.assertEqual(git.call_args.kwargs["cwd"], Path("build/src/brave"))
+                self.assertEqual(git.call_args.kwargs["cwd"], Path("build/checkout/src/brave"))
                 self.assertEqual(git.call_args.args[0], ["git", "am", "--keep-cr", str(root / "patches/fix.patch")])
                 self.assertTrue(git.call_args.kwargs["check"])
 

@@ -62,7 +62,7 @@ class CompilePreflightTests(unittest.TestCase):
             self.native_marker(root)
             self.assertEqual(compile_checked(self.command, root, 100, "source"), 0)
             self.assertEqual(build.call_args_list[0].args[2], 98)
-            self.assertEqual(build.call_args_list[1].args, (self.command, root / "src/brave", 70))
+            self.assertEqual(build.call_args_list[1].args, (self.command, root / "checkout/src/brave", 70))
             self.assertEqual(json.loads((root / "settings-typecheck.json").read_text())["patch_digest"], "source")
 
     def test_resumed_matching_source_skips_preflight_but_changed_source_does_not(self):

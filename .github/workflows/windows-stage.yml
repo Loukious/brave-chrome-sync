@@ -141,9 +141,9 @@ jobs:
         with:
           name: build-diagnostics-${{ inputs.stage }}
           path: |
-            D:/b/src/out/Sync/siso_explain*
-            D:/b/src/out/Sync/siso_metrics*.json
-            D:/b/src/out/Sync/siso_metadata*.json
+            D:/b/checkout/src/out/Sync/siso_explain*
+            D:/b/checkout/src/out/Sync/siso_metrics*.json
+            D:/b/checkout/src/out/Sync/siso_metadata*.json
           retention-days: 5
           if-no-files-found: ignore
       - name: Upload next checkpoint

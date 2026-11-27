@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 import subprocess
 import uuid
-import urllib.request
+
+from chromium_source import read_chromium_source
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -14,9 +15,7 @@ version = json.loads((args.brave / "package.json").read_text())["config"]["proje
 fixture = ROOT / "work" / ("native-shell-patch-" + uuid.uuid4().hex)
 source = fixture / "chrome/installer/util/shell_util.cc"
 source.parent.mkdir(parents=True)
-url = f"https://raw.githubusercontent.com/chromium/chromium/{version}/chrome/installer/util/shell_util.cc"
-with urllib.request.urlopen(url, timeout=60) as response:
-    source.write_bytes(response.read())
+source.write_bytes(read_chromium_source(version, "chrome/installer/util/shell_util.cc"))
 subprocess.run(["git", "init", "--quiet", str(fixture)], check=True)
 patch = (args.brave / "patches/chrome-installer-util-shell_util.cc.patch").read_bytes()
 subprocess.run(["git", "apply", "--check", "-"], input=patch, check=True, cwd=fixture)

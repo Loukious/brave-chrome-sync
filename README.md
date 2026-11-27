@@ -20,9 +20,10 @@ and launches pinned windows through the stable launcher.
 Google credentials and local browser profiles are excluded. The Brave client
 service key is supplied through an Actions secret and compiled into the browser.
 
-The current patch base and minimum automatically selected source is **v1.101.35**
-(Chromium 158). Patch 0001 follows its Lit Settings menu/main page and updated Chromium
-patch references; earlier patch revisions remain available in Git history.
+The current patch base and minimum automatically selected source is **v1.102.47**
+(Chromium 159). Patch 0001 follows its nested Lit Settings templates and removes
+the Brave Sync rewrites that would override Chromium's Google account flow.
+Earlier patch revisions remain available in Git history.
 
 ## Automated builds
 

@@ -6,6 +6,8 @@ import subprocess
 import urllib.request
 import uuid
 
+from chromium_source import read_chromium_source
+
 ROOT = Path(__file__).resolve().parents[1]
 work = ROOT / "work/native-registration"
 work.mkdir(parents=True, exist_ok=True)
@@ -27,8 +29,7 @@ with urllib.request.urlopen(url, timeout=60) as response:
 for relative in ["base/win/shlwapi.h", "base/win/windows_defines.inc", "base/win/windows_undefines.inc"]:
     target = fixture / relative
     target.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(f"https://raw.githubusercontent.com/chromium/chromium/{version}/{relative}", timeout=60) as response:
-        target.write_bytes(response.read())
+    target.write_bytes(read_chromium_source(version, relative))
 devcmd = Path("C:/BuildTools2026/Common7/Tools/VsDevCmd.bat")
 if not devcmd.exists():
     vswhere = Path(os.environ["ProgramFiles(x86)"]) / "Microsoft Visual Studio/Installer/vswhere.exe"

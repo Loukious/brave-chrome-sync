@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {mkdir, mkdtemp, readFile, writeFile} from 'node:fs/promises';
 import {registerHooks, stripTypeScriptTypes} from 'node:module';
 import path from 'node:path';
@@ -9,10 +10,8 @@ export async function mangleSettingsTemplate(brave, page) {
   const metadata = JSON.parse(await readFile(path.join(brave, 'package.json'), 'utf8'));
   const version = metadata.config.projects.chrome.tag;
   const resource = `chrome/browser/resources/settings/${page}/${page}.html.ts`;
-  const response = await fetch(`https://raw.githubusercontent.com/chromium/chromium/${version}/${resource}`,
-                               {signal: AbortSignal.timeout(60000)});
-  assert.equal(response.status, 200, 'Matching Chromium Settings template must be available');
-  const original = await response.text();
+  const downloader = path.resolve(import.meta.dirname, '../chromium_source.py');
+  const original = execFileSync('python', [downloader, version, resource], {encoding: 'utf8'});
   const work = path.resolve(import.meta.dirname, '../../work');
   await mkdir(work, {recursive: true});
   const directory = await mkdtemp(path.join(work, `${page}-`));

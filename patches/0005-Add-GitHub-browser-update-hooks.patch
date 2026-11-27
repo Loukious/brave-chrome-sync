@@ -1,4 +1,4 @@
-From 35628fbf06b5dd6b141aafcd768d412dd29a995c Mon Sep 17 00:00:00 2001
+From 78f6ffff1329ce527c55753c7c558fff363d347b Mon Sep 17 00:00:00 2001
 From: Brave Chrome Sync build <build@users.noreply.github.com>
 Date: Sat, 3 Oct 2026 11:38:10 +0100
 Subject: [PATCH] Add GitHub browser update hooks
@@ -20,10 +20,10 @@ Subject: [PATCH] Add GitHub browser update hooks
  create mode 100644 patches/chrome-browser-first_run-BUILD.gn.patch
 
 diff --git a/browser/brave_browser_main_parts.cc b/browser/brave_browser_main_parts.cc
-index d78b07418..e395ee8f3 100644
+index bbf421897..34248392f 100644
 --- a/browser/brave_browser_main_parts.cc
 +++ b/browser/brave_browser_main_parts.cc
-@@ -21,6 +21,9 @@
+@@ -22,6 +22,9 @@
  #include "brave/components/speedreader/common/buildflags/buildflags.h"
  #include "brave/components/tor/buildflags/buildflags.h"
  #include "build/build_config.h"
@@ -33,7 +33,7 @@ index d78b07418..e395ee8f3 100644
  #include "chrome/browser/browser_process.h"
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/common/chrome_features.h"
-@@ -98,6 +101,10 @@ void ChromeBrowserMainParts::PreBrowserStart() {
+@@ -99,6 +102,10 @@ void ChromeBrowserMainParts::PreBrowserStart() {
  void ChromeBrowserMainParts::PostBrowserStart() {
    ChromeBrowserMainParts_ChromiumImpl::PostBrowserStart();
  
@@ -139,10 +139,10 @@ index 40a800a35..ab8201d7b 100644
  
      // <if expr="not is_win">
 diff --git a/browser/sources.gni b/browser/sources.gni
-index 4a2020d54..45caa6743 100644
+index 6937b8eca..18e50975e 100644
 --- a/browser/sources.gni
 +++ b/browser/sources.gni
-@@ -739,6 +739,7 @@ if (enable_widevine) {
+@@ -736,6 +736,7 @@ if (enable_widevine) {
  }
  
  if (is_win) {
@@ -151,7 +151,7 @@ index 4a2020d54..45caa6743 100644
      "//brave/browser/brave_shell_integration_win.cc",
      "//brave/browser/brave_shell_integration_win.h",
 diff --git a/browser/ui/webui/help/BUILD.gn b/browser/ui/webui/help/BUILD.gn
-index 6c7df4816..d2f3032c8 100644
+index d90cb198f..424d3224e 100644
 --- a/browser/ui/webui/help/BUILD.gn
 +++ b/browser/ui/webui/help/BUILD.gn
 @@ -11,6 +11,10 @@ import("//brave/browser/updater/buildflags.gni")
@@ -164,7 +164,7 @@ index 6c7df4816..d2f3032c8 100644
 +
    if (is_mac) {
      # Deps for the includes in the version_updater_mac.mm override.
-     public_deps += [ "//brave/browser/updater:buildflags" ]
+     public_deps += [
 diff --git a/chromium_src/chrome/browser/first_run/upgrade_util_win.cc b/chromium_src/chrome/browser/first_run/upgrade_util_win.cc
 index d17559d66..381091076 100644
 --- a/chromium_src/chrome/browser/first_run/upgrade_util_win.cc
@@ -376,6 +376,3 @@ index 000000000..bb2172567
 +         "first_run_internal_win.cc",
 +         "upgrade_util_win.cc",
 +       ]
--- 
-2.55.0.windows.3
-
